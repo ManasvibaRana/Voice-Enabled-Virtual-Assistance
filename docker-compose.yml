@@ -1,0 +1,20 @@
+services:
+  assistant:
+    build: .
+    ports:
+      # Bound to 127.0.0.1 on purpose. Browsers only grant microphone access on
+      # localhost or HTTPS, and this app has no TLS of its own.
+      - "127.0.0.1:8000:8000"
+    environment:
+      # Required. Get a free key at https://build.nvidia.com
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:?set NVIDIA_API_KEY in .env}
+      # Set this so logins survive a restart; otherwise a random one is
+      # generated per container and every token is invalidated on rebuild.
+      JWT_SECRET: ${JWT_SECRET:-}
+    volumes:
+      # Keeps accounts, reminders and the vector store across rebuilds.
+      - assistant-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  assistant-data:

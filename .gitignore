@@ -1,0 +1,11 @@
+# Never commit the API key
+.env
+
+.venv/
+__pycache__/
+*.py[cod]
+
+# Generated at runtime
+data/app.db
+data/chroma/
+.pytest_cache/

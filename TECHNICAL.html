@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Voice-Enabled Virtual Assistant — Technical Reference</title>
+<style>
+  :root {
+    --ink: #080a0f; --panel: rgba(255,255,255,.035); --panel-2: rgba(255,255,255,.06);
+    --text: #eef1f7; --muted: #99a1b5; --faint: #6d758a;
+    --indigo: #6d8bff; --cyan: #4cc9f0; --violet: #b98cff;
+    --amber: #f7b955; --green: #3ddc97; --red: #ff7a7a;
+    --hair: rgba(255,255,255,.09); --hair-2: rgba(255,255,255,.05);
+    --sunken: rgba(0,0,0,.35); --sheen: rgba(255,255,255,.06);
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    --r: 14px; --ease: cubic-bezier(.22,1,.36,1);
+  }
+  :root[data-theme="light"] {
+    --ink: #f6f7fb; --panel: rgba(255,255,255,.8); --panel-2: #fff;
+    --text: #141824; --muted: #555f75; --faint: #838ca2;
+    --indigo: #4b64d8; --cyan: #0d7fa5; --violet: #7c4ddb;
+    --amber: #a56a08; --green: #0d8f5f; --red: #cf4141;
+    --hair: rgba(16,22,40,.12); --hair-2: rgba(16,22,40,.07);
+    --sunken: rgba(16,22,40,.045); --sheen: rgba(255,255,255,.9);
+    --shadow: 0 1px 2px rgba(16,22,40,.06), 0 10px 30px rgba(16,22,40,.08);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 20px; }
+  body {
+    margin: 0; background: var(--ink); color: var(--text);
+    font: 16px/1.72 "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(60% 40% at 12% 0%, rgba(109,139,255,.10), transparent 65%),
+      radial-gradient(50% 35% at 95% 5%, rgba(76,201,240,.07), transparent 60%);
+    background-attachment: fixed;
+  }
+
+  .wrap { display: grid; grid-template-columns: 262px minmax(0,1fr); gap: 44px;
+          max-width: 1200px; margin: 0 auto; padding: 0 28px; }
+
+  /* ---------- sidebar ---------- */
+  nav {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    padding: 30px 0 40px; font-size: 13.5px;
+  }
+  nav .brand { font-weight: 650; font-size: 15px; letter-spacing: -.015em;
+               display: flex; align-items: center; gap: 9px; margin-bottom: 4px; }
+  nav .brand::before { content:""; width:18px; height:18px; border-radius:6px;
+    background: conic-gradient(from 140deg, var(--indigo), var(--cyan), var(--violet), var(--indigo));
+    box-shadow: 0 0 14px rgba(109,139,255,.45); }
+  nav .tagline { color: var(--faint); font-size: 12.5px; margin: 0 0 20px 27px; }
+  nav ol { list-style: none; margin: 0; padding: 0; counter-reset: s; }
+  nav li { counter-increment: s; }
+  nav a {
+    display: block; padding: 6px 12px 6px 34px; color: var(--muted);
+    text-decoration: none; border-radius: 8px; position: relative;
+    border-left: 2px solid transparent; transition: all .18s var(--ease);
+  }
+  nav a::before {
+    content: counter(s); position: absolute; left: 12px; color: var(--faint);
+    font-size: 11px; font-variant-numeric: tabular-nums;
+  }
+  nav a:hover { color: var(--text); background: var(--panel); }
+  nav a.on { color: var(--cyan); border-left-color: var(--cyan); background: var(--panel); }
+  nav a.on::before { color: var(--cyan); }
+
+  /* ---------- content ---------- */
+  main { padding: 30px 0 100px; min-width: 0; }
+  header.hero { padding: 26px 0 34px; border-bottom: 1px solid var(--hair); margin-bottom: 34px; }
+  header.hero h1 { font-size: 38px; line-height: 1.15; margin: 0 0 12px; letter-spacing: -.03em; font-weight: 660; }
+  header.hero p { color: var(--muted); margin: 0; font-size: 17px; max-width: 62ch; }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+  .badge {
+    font-size: 12px; padding: 5px 12px; border-radius: 999px;
+    background: var(--panel); border: 1px solid var(--hair); color: var(--muted);
+  }
+  .badge b { color: var(--text); font-weight: 650; }
+
+  section { margin-bottom: 54px; scroll-margin-top: 24px; }
+  h2 {
+    font-size: 25px; letter-spacing: -.022em; margin: 0 0 6px; font-weight: 650;
+    padding-top: 10px;
+  }
+  h2 .num { color: var(--indigo); font-variant-numeric: tabular-nums; margin-right: 10px; }
+  h3 { font-size: 17px; margin: 30px 0 10px; letter-spacing: -.012em; font-weight: 620; }
+  h4 { font-size: 14.5px; margin: 22px 0 8px; color: var(--muted); font-weight: 620; }
+  p { margin: 0 0 15px; }
+  ul, ol { margin: 0 0 15px; padding-left: 22px; }
+  li { margin-bottom: 7px; }
+  a { color: var(--cyan); }
+  code {
+    font-family: "Cascadia Mono", Consolas, ui-monospace, monospace;
+    font-size: .875em; background: var(--sunken); padding: 2px 6px;
+    border-radius: 5px; border: 1px solid var(--hair-2);
+  }
+  pre {
+    background: var(--sunken); border: 1px solid var(--hair); border-radius: var(--r);
+    padding: 16px 18px; overflow-x: auto; margin: 0 0 18px;
+    font-family: "Cascadia Mono", Consolas, ui-monospace, monospace;
+    font-size: 13px; line-height: 1.65;
+  }
+  pre code { background: none; border: none; padding: 0; font-size: inherit; }
+
+  table { border-collapse: collapse; width: 100%; margin: 0 0 18px; font-size: 14.5px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--hair-2); vertical-align: top; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .1em;
+       color: var(--faint); font-weight: 650; border-bottom-color: var(--hair); }
+  tbody tr:hover { background: var(--panel); }
+  td code { white-space: nowrap; }
+  .num-col { font-variant-numeric: tabular-nums; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--hair); border-radius: var(--r);
+    padding: 18px 20px; margin: 0 0 18px; box-shadow: inset 0 1px 0 var(--sheen);
+  }
+  .callout {
+    border-left: 3px solid var(--indigo); padding: 14px 18px; margin: 0 0 18px;
+    background: var(--panel); border-radius: 0 var(--r) var(--r) 0;
+  }
+  .callout.warn { border-left-color: var(--amber); }
+  .callout.good { border-left-color: var(--green); }
+  .callout.bad  { border-left-color: var(--red); }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout .label {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .12em;
+    font-weight: 700; color: var(--indigo); display: block; margin-bottom: 6px;
+  }
+  .callout.warn .label { color: var(--amber); }
+  .callout.good .label { color: var(--green); }
+  .callout.bad .label  { color: var(--red); }
+
+  .ok { color: var(--green); font-weight: 650; }
+  .no { color: var(--red); font-weight: 650; }
+  .kw { color: var(--indigo); font-weight: 650; }
+  .fn { color: var(--cyan); }
+  .str { color: var(--green); }
+  .cm { color: var(--faint); font-style: italic; }
+
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px,1fr)); gap: 14px; margin-bottom: 18px; }
+  .stat { background: var(--panel); border: 1px solid var(--hair); border-radius: var(--r); padding: 16px 18px; }
+  .stat .big { font-size: 27px; font-weight: 660; letter-spacing: -.02em; display: block; }
+  .stat .lbl { font-size: 12.5px; color: var(--faint); }
+
+  #theme {
+    position: fixed; top: 18px; right: 20px; z-index: 10;
+    width: 38px; height: 38px; border-radius: 10px; cursor: pointer; font-size: 15px;
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--hair);
+    box-shadow: var(--shadow);
+  }
+  #theme:hover { border-color: var(--indigo); }
+
+  @media (max-width: 940px) {
+    .wrap { grid-template-columns: 1fr; gap: 0; }
+    nav { position: static; height: auto; padding: 24px 0 0; }
+    nav ol { columns: 2; }
+    header.hero h1 { font-size: 30px; }
+  }
+
+  /* ---------- print / PDF ---------- */
+  @media print {
+    :root { --ink:#fff; --text:#000; --muted:#333; --faint:#555;
+            --hair:#ccc; --hair-2:#e2e2e2; --panel:#fff; --sunken:#f5f5f5; --sheen:transparent; }
+    body { background: none; font-size: 10.5pt; }
+    nav, #theme { display: none; }
+    .wrap { display: block; max-width: none; padding: 0; }
+    section { page-break-inside: avoid; margin-bottom: 22px; }
+    h2 { page-break-after: avoid; font-size: 15pt; }
+    h3 { page-break-after: avoid; }
+    pre, table, .card, .callout { page-break-inside: avoid; }
+    a { color: #000; text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+
+<button id="theme" title="Switch theme" aria-label="Switch theme">&#9681;</button>
+
+<div class="wrap">
+<nav>
+  <div class="brand">Technical Reference</div>
+  <p class="tagline">Voice-Enabled Virtual Assistant</p>
+  <ol>
+    <li><a href="#s1">What the system is</a></li>
+    <li><a href="#s2">Life of one question</a></li>
+    <li><a href="#s3">Speech to text</a></li>
+    <li><a href="#s4">The language model</a></li>
+    <li><a href="#s5">Routing</a></li>
+    <li><a href="#s6">Text to SQL</a></li>
+    <li><a href="#s7">Retrieval (RAG)</a></li>
+    <li><a href="#s8">The other three skills</a></li>
+    <li><a href="#s9">Answer composition</a></li>
+    <li><a href="#s10">Text to speech</a></li>
+    <li><a href="#s11">Authentication</a></li>
+    <li><a href="#s12">Row-level security</a></li>
+    <li><a href="#s13">The web layer</a></li>
+    <li><a href="#s14">The frontend</a></li>
+    <li><a href="#s15">Conversation memory</a></li>
+    <li><a href="#s16">Performance</a></li>
+    <li><a href="#s17">Testing</a></li>
+    <li><a href="#s18">Bugs &amp; lessons</a></li>
+    <li><a href="#s19">Limitations</a></li>
+    <li><a href="#s20">File map</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="hero">
+  <h1>Voice-Enabled Virtual Assistant</h1>
+  <p>Everything in this project: what it is, why it was chosen over the alternatives,
+     and how the underlying technology actually works. Every number quoted was measured
+     on this codebase. Where something is unverified, it says so.</p>
+  <div class="meta-row">
+    <span class="badge"><b>5</b> skills</span>
+    <span class="badge"><b>137</b> tests</span>
+    <span class="badge"><b>9</b> SQL guards</span>
+    <span class="badge">Python <b>3.11</b></span>
+    <span class="badge">Llama <b>3.1</b> via NVIDIA NIM</span>
+    <span class="badge">no paid API</span>
+  </div>
+</header>
+
+<!-- ============================================================ 1 -->
+<section id="s1">
+  <h2><span class="num">01</span>What the system is</h2>
+  <p>A voice assistant for a college. You speak; it decides which of five skills can
+     answer; it runs that skill; it speaks a short answer back. Signed in as a student
+     it answers about <em>you</em> and can see nobody else's records.</p>
+  <p>Every component runs locally except the language model, which uses NVIDIA NIM's
+     free tier. No paid API, no credit card.</p>
+
+  <table>
+    <thead><tr><th>Layer</th><th>Choice</th><th>Runs</th></tr></thead>
+    <tbody>
+      <tr><td>Speech to text</td><td>faster-whisper <code>base</code>, int8</td><td>locally, CPU</td></tr>
+      <tr><td>Language model</td><td>Llama 3.1 (8B + 70B) via NVIDIA NIM</td><td>remote, free tier</td></tr>
+      <tr><td>Embeddings</td><td>sentence-transformers, all-MiniLM-L6-v2</td><td>locally, CPU</td></tr>
+      <tr><td>Vector store</td><td>ChromaDB, persistent</td><td>locally, on disk</td></tr>
+      <tr><td>Database</td><td>SQLite</td><td>locally, one file</td></tr>
+      <tr><td>Text to speech</td><td>pyttsx3 (SAPI5 on Windows)</td><td>locally, offline</td></tr>
+      <tr><td>Web server</td><td>FastAPI + uvicorn</td><td>locally</td></tr>
+      <tr><td>Frontend</td><td>one HTML file, vanilla JS</td><td>browser</td></tr>
+      <tr><td>Passwords</td><td>bcrypt</td><td>—</td></tr>
+      <tr><td>Sessions</td><td>PyJWT, HS256</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <span class="label">Deliberately not used</span>
+    <p>No React, no build step, no CSS framework, no LangChain, no ORM, no CDN.
+       The whole frontend is one file the browser reads directly — which also means a
+       strict <code>Content-Security-Policy</code> costs nothing.</p>
+  </div>
+</section>
+
+<!-- ============================================================ 2 -->
+<section id="s2">
+  <h2><span class="num">02</span>The life of one question</h2>
+<pre><code> browser                          server
+────────────────────────────────────────────────────────────────────
+ hold orb / Space
+ MediaRecorder captures WebM/Opus
+        │  POST /ask-audio  (multipart, Bearer token)
+        ▼
+                                  verify JWT ──► principal (user + role)
+                                  faster-whisper ──► transcript   ~1.4s
+        ◄── {"event":"transcript"}
+        ◄── {"event":"stage","stage":"heard"}
+                                  ┌─ router (8B)    ─┐ started
+                                  ├─ SQL tool (70B) ─┤ together,
+                                  └─ RAG retrieve   ─┘ loser discarded
+        ◄── {"event":"stage","stage":"routed"}
+                                  chosen skill runs
+        ◄── {"event":"stage","stage":"queried"}
+                                  compose (8B), streamed
+        ◄── {"event":"delta","text":"Your "}   ← types out live
+        ◄── {"event":"final", ...full payload...}
+                                  pyttsx3 ──► WAV
+        ◄── {"event":"audio","audio_base64":"..."}
+ orb pulses with the answer</code></pre>
+
+  <p>Everything is <strong>newline-delimited JSON</strong> over one HTTP response.
+     Both <code>/ask-text</code> and <code>/ask-audio</code> emit the same event shape,
+     so the browser has a single consumer for both.</p>
+
+  <h3>Why NDJSON rather than the obvious alternatives</h3>
+  <table>
+    <thead><tr><th>Option</th><th>Why not</th></tr></thead>
+    <tbody>
+      <tr><td>One JSON response</td><td>What it was originally. The transcript only appeared after the entire turn — <strong>12.4s of blank screen</strong>. Unacceptable for voice.</td></tr>
+      <tr><td>WebSockets</td><td>Bidirectional, which this does not need. Adds connection lifecycle, reconnection and a second auth path.</td></tr>
+      <tr><td>Server-Sent Events</td><td>Genuinely close, and a fair alternative. Rejected because <code>EventSource</code> is <code>GET</code>-only and we must POST audio. Using fetch + SSE framing means hand-parsing anyway.</td></tr>
+      <tr><td><span class="ok">NDJSON over fetch ✓</span></td><td>One POST, one response, <code>body.getReader()</code>, split on newline. Works for audio upload and text alike.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================================ 3 -->
+<section id="s3">
+  <h2><span class="num">03</span>Speech to text — faster-whisper</h2>
+  <p><code>app/stt.py</code> · model <code>base</code>, <code>int8</code>, CPU</p>
+
+  <h3>How Whisper works</h3>
+  <p>Whisper is an encoder-decoder Transformer trained on 680,000 hours of labelled audio.</p>
+  <ol>
+    <li>Audio is resampled to <strong>16 kHz mono</strong>.</li>
+    <li>It becomes a <strong>log-Mel spectrogram</strong> — a 2-D picture of energy across
+        80 frequency bands over time. This is the model input; Whisper never sees raw samples.</li>
+    <li>The <strong>encoder</strong> turns that spectrogram into a sequence of vectors.</li>
+    <li>The <strong>decoder</strong> generates text tokens autoregressively, cross-attending
+        to the encoder output — the same architecture as a translation model, with audio on
+        one side and text on the other.</li>
+    <li>Special tokens at the start select the task: language, transcribe-vs-translate,
+        timestamps. <strong>This is why language detection is free</strong> — the model
+        predicts a language token before any text.</li>
+  </ol>
+
+  <h3>Why faster-whisper rather than <code>openai-whisper</code></h3>
+  <p>A reimplementation on <strong>CTranslate2</strong>, a C++ inference engine.
+     Same weights, different runtime:</p>
+  <ul>
+    <li><strong>Quantisation</strong> — <code>int8</code> stores weights as 8-bit integers
+        instead of 32-bit floats: ~4× smaller and faster on CPU, because integer arithmetic
+        is cheaper and far more of the model fits in cache. Accuracy loss on <code>base</code> is small.</li>
+    <li><strong>Layer fusion and a custom attention kernel</strong>, rather than PyTorch's
+        generic operator dispatch.</li>
+    <li>No PyTorch at inference time.</li>
+  </ul>
+  <p>Typically 3–4× faster than the reference implementation on CPU at equal output.</p>
+
+  <h3>Why <code>base</code>, and the honest trade-off</h3>
+  <table>
+    <thead><tr><th>Model</th><th>Params</th><th>Measured here</th><th>Accuracy</th></tr></thead>
+    <tbody>
+      <tr><td><code>tiny</code></td><td>39M</td><td>fastest</td><td>noticeably worse</td></tr>
+      <tr><td><span class="ok"><code>base</code> ✓</span></td><td>74M</td><td class="num-col"><strong>~1.4s</strong> per question</td><td>acceptable</td></tr>
+      <tr><td><code>small</code></td><td>244M</td><td>~3× slower</td><td>clearly better</td></tr>
+      <tr><td><code>medium</code>/<code>large</code></td><td>769M/1.5B</td><td>too slow on CPU</td><td>best</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout bad">
+    <span class="label">The weakest link in the system</span>
+    <p>Real transcripts from testing: <em>"and that my CG that make my CGP off"</em> for
+       "what's my CGPA", and <em>"I got 30 months right"</em> for "I got 30 marks".
+       No prompt engineering recovers from that.</p>
+    <p>Two mitigations ship: the <strong>edit &amp; resend</strong> link under every voice
+       question, and garbled clarifications now routing to smalltalk rather than inventing
+       a database query. Moving to <code>small</code> is a one-line change in
+       <code>config.py</code>.</p>
+  </div>
+
+  <h3>Alternatives rejected</h3>
+  <ul>
+    <li><strong>Google / Azure / AWS speech</strong> — accurate and fast, but paid, needs a
+        card, and sends audio off-device. The brief required free and local.</li>
+    <li><strong>Vosk</strong> — genuinely offline and light, but noticeably worse on accented English.</li>
+    <li><strong>Web Speech API</strong> — free and zero install, but Chrome silently ships
+        audio to Google's servers, Firefox lacks it, and it cannot be demoed offline.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 4 -->
+<section id="s4">
+  <h2><span class="num">04</span>The language model — NVIDIA NIM</h2>
+  <p><code>app/llm.py</code></p>
+
+  <h3>What NIM is, and why the <code>openai</code> package</h3>
+  <p>NVIDIA NIM exposes models behind an <strong>OpenAI-compatible REST API</strong>.
+     Because the wire format matches, the official <code>openai</code> package works as a
+     client with only the base URL changed:</p>
+<pre><code><span class="fn">OpenAI</span>(base_url=<span class="str">"https://integrate.api.nvidia.com/v1"</span>, api_key=NVIDIA_API_KEY)</code></pre>
+  <p><strong>No OpenAI account or key is involved.</strong> The package is a well-tested
+     HTTP client for a protocol NVIDIA happens to implement. Hand-rolling <code>requests</code>
+     calls would mean reimplementing streaming, retries and error types for no benefit.</p>
+
+  <h3>Three models, chosen by measurement</h3>
+  <table>
+    <thead><tr><th>Setting</th><th>Model</th><th>Job</th></tr></thead>
+    <tbody>
+      <tr><td><code>LLM_MODEL</code></td><td>llama-3.1-70b-instruct</td><td>writes SQL</td></tr>
+      <tr><td><code>ROUTER_MODEL</code></td><td>llama-3.1-8b-instruct</td><td>picks the skill</td></tr>
+      <tr><td><code>COMPOSE_MODEL</code></td><td>llama-3.1-8b-instruct</td><td>writes the spoken answer</td></tr>
+    </tbody>
+  </table>
+
+  <p>This split came from data. <strong>Eight identical calls, same prompt, same token limit:</strong></p>
+  <table>
+    <thead><tr><th>Model</th><th>Latency across 8 calls</th></tr></thead>
+    <tbody>
+      <tr><td><code>8b</code></td><td class="num-col">0.41, 0.47, 0.41, 0.47, 0.50, 0.44, 0.46, 0.48 — <span class="ok">flat</span></td></tr>
+      <tr><td><code>70b</code></td><td class="num-col">2.40, <span class="no">25.19</span>, 3.59, <span class="no">18.27</span>, 2.72, 1.28, 0.94, <span class="no">24.15</span></td></tr>
+    </tbody>
+  </table>
+  <p>The free-tier 70B endpoint is queue-contended. So the two easy jobs — a 5-way
+     classification and a short rewrite of data already computed — went to 8B, which is
+     both faster <em>and</em> more predictable.</p>
+
+  <p><strong>But SQL stayed on 70B</strong>, because accuracy mattered more:</p>
+  <table>
+    <thead><tr><th></th><th>Accuracy</th><th>Median</th><th>Max</th></tr></thead>
+    <tbody>
+      <tr><td>70B</td><td class="ok">11/11</td><td class="num-col">42.5s</td><td class="num-col">132.6s</td></tr>
+      <tr><td>8B</td><td class="no">8–10/11</td><td class="num-col ok">0.78s</td><td class="num-col">1.02s</td></tr>
+    </tbody>
+  </table>
+  <p>8B scored 6/6 in isolation but degraded in a real conversation, flaking on
+     "lowest attendance" (a <code>LEFT JOIN</code> NULL-ordering trap) and on normalising
+     percentages. Setting <code>LLM_MODEL = ROUTER_MODEL</code> flips the whole system to
+     fast-and-flakier.</p>
+
+  <div class="callout warn">
+    <span class="label">A model being listed does not mean it works</span>
+    <p><code>meta/llama-3.3-70b-instruct</code> appears in NIM's <code>/v1/models</code>
+       but every inference request hung until timeout. Diagnosis: a deliberately
+       <em>wrong</em> key returned <code>403</code> in 0.4s — proving network and auth were
+       fine — while 3.1-70B answered the identical request in 0.6s. Always test the exact
+       model string.</p>
+  </div>
+
+  <h3>Why not a "thinking" model</h3>
+  <p>R1-style models emit chain-of-thought before the answer. This system parses
+     <strong>strict JSON</strong> from the router and <strong>bare SQL</strong> from the
+     generator. Reasoning traces break both parsers.</p>
+
+  <h3>Reliability wrapper</h3>
+  <p><code>llm.chat()</code> never raises. On failure it returns <code>""</code> and the caller falls back:</p>
+  <ul>
+    <li><strong>429 rate limit</strong> → exponential backoff, 2s → 4s → 8s (free tier is
+        ~40 requests/minute; each question costs 2–3 calls).</li>
+    <li><strong>JSON parsing</strong> → strip fences, <code>json.loads</code>, then regex out
+        the first <code>{...}</code>, then a caller-supplied fallback.</li>
+    <li><strong>Streaming</strong> retries only <em>before the first token</em>. Once text
+        has been handed to the caller it cannot be unsaid, so a mid-stream break ends the
+        stream rather than restarting and duplicating output.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 5 -->
+<section id="s5">
+  <h2><span class="num">05</span>Routing</h2>
+  <p><code>app/router.py</code> — one LLM call classifies into one of five skills and
+     returns strict JSON: <code>{"tool": "...", "reason": "..."}</code>. The reason is shown in the UI.</p>
+
+  <table>
+    <thead><tr><th>Approach</th><th>Why not</th></tr></thead>
+    <tbody>
+      <tr><td>Keyword rules</td><td>"How many students are in semester 6" and "What is the attendance policy" share the word <em>attendance</em>. Rules become an unmaintainable thicket and fail on paraphrase.</td></tr>
+      <tr><td>Embedding similarity to skill descriptions</td><td>Cheap and local, but poor at <em>intent</em>. "Remind me about the attendance policy" is lexically close to both reminders and documents.</td></tr>
+      <tr><td>Fine-tuned classifier</td><td>Best accuracy, but needs a labelled dataset that does not exist for a student project.</td></tr>
+      <tr><td><span class="ok">LLM with a JSON contract ✓</span></td><td>Handles paraphrase and context, needs no training data, and the <em>reason</em> field doubles as a UI explanation. <strong>Measured 9/9</strong> on the routing test set.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Defensive parsing</h3>
+  <p>The router <strong>must not be able to crash the app</strong>. Parsing is layered:
+     strip fences → <code>json.loads</code> → regex-extract the first JSON object → validate
+     the tool name against a whitelist → fall back to <code>search_documents</code>.</p>
+
+  <h3>Conversation-aware routing</h3>
+  <p>A clarification like <em>"is that a percentage or a CGPA?"</em> is answerable by
+     re-reading the previous turn. It used to hit the database and generate
+     <code>SELECT 'percentage'</code> — a fabricated query. Those now route to
+     <code>smalltalk</code>, which sees the history and repeats the figure it already gave
+     rather than recomputing a different one.</p>
+</section>
+
+<!-- ============================================================ 6 -->
+<section id="s6">
+  <h2><span class="num">06</span>Text to SQL</h2>
+  <p><code>app/sql_tool.py</code> — the largest and most safety-critical module.</p>
+
+<pre><code>question ─► generate ─► validate ─► execute (read-only, scoped) ─► rows
+                │                        │
+                └────── on SQLite error, one repair attempt ──────┘</code></pre>
+
+  <h3>Prompt construction</h3>
+  <p>The system prompt is built at runtime from the live database, so it cannot drift:</p>
+  <ol>
+    <li><code>CREATE TABLE</code> statements read from <code>sqlite_master</code>.</li>
+    <li><strong>Three sample rows per table</strong> — so the model sees that
+        <code>exam_type</code> is <code>'midterm'</code>, not <code>'mid-term'</code>.</li>
+    <li><strong>Every value of low-cardinality columns</strong> (subject names, branches,
+        exam types) so it matches exact spellings instead of guessing <code>LIKE</code> patterns.</li>
+    <li>Derived views for grades, with sample rows.</li>
+  </ol>
+
+  <h3>Nine safety guards</h3>
+  <table>
+    <thead><tr><th>#</th><th>Guard</th><th>Stops</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Prompt demands one <code>SELECT</code></td><td>the honest case</td></tr>
+      <tr><td>2</td><td>Strip fences, <code>SQL:</code> prefixes, prose</td><td>formatting noise</td></tr>
+      <tr><td>3</td><td>Reject any semicolon except one trailing</td><td><code>SELECT 1; DROP TABLE students</code></td></tr>
+      <tr><td>4</td><td>Must start with <code>SELECT</code></td><td>all DML/DDL</td></tr>
+      <tr><td>5</td><td>Keyword blocklist</td><td><code>INSERT UPDATE DELETE DROP ALTER ATTACH PRAGMA</code>…</td></tr>
+      <tr><td>6</td><td>Reject <code>--</code>, <code>/*</code>, <code>*/</code></td><td>comment-smuggled payloads</td></tr>
+      <tr><td>7</td><td>Reject <code>main.</code> / <code>temp.</code> / <code>sqlite_*</code></td><td><strong>escaping row-level security</strong></td></tr>
+      <tr><td>8</td><td>Reject <code>users</code></td><td>reading password hashes</td></tr>
+      <tr><td>9</td><td>Connection opened <code>file:app.db?mode=ro</code></td><td>everything else</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout good">
+    <span class="label">Guard 9 is the one that matters</span>
+    <p>It is <strong>enforced by SQLite</strong>, not by us. A write attempt raises
+       <code>sqlite3.OperationalError: attempt to write a readonly database</code>.
+       Guards 1–8 are defence in depth above it.</p>
+  </div>
+
+  <h3>Why generate SQL at all</h3>
+  <table>
+    <thead><tr><th>Alternative</th><th>Trade-off</th></tr></thead>
+    <tbody>
+      <tr><td>Fixed query templates</td><td>Safe and fast, but only answers anticipated questions. "Which student has the lowest attendance" needs a template nobody wrote.</td></tr>
+      <tr><td>A semantic layer / metrics API</td><td>The production answer for a real company. Weeks of work to define every metric.</td></tr>
+      <tr><td><span class="ok">LLM-generated SQL, sandboxed ✓</span></td><td>Answers open-ended questions. The risk is real — which is exactly why nine guards exist and why isolation is enforced by the database.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Grades and CGPA — derived, not guessed</h3>
+  <div class="callout bad">
+    <span class="label">The bug</span>
+    <p>Asked <em>"what is my CGPA?"</em>, the model averaged mark percentages and answered
+       <strong>"your CGPA is 74.4"</strong>. A percentage is out of 100; a CGPA is out of 10.
+       Confidently wrong.</p>
+  </div>
+  <p>The grading rules are published in <code>docs/exam_grading_policy.md</code>, so they can
+     be computed exactly. Three temp views do it:</p>
+<pre><code>subject_totals  → weight each exam type (quiz 20, midterm 30, final 50),
+                  rescaled to 100 over the components actually present
+subject_grades  → grade bands O=10 … F=0
+cgpa            → SUM(grade_points × credits) / SUM(credits)</code></pre>
+
+  <p>Verified against a hand calculation:</p>
+  <table>
+    <thead><tr><th>Subject</th><th>Total</th><th>Grade</th><th>Points</th><th>Credits</th></tr></thead>
+    <tbody>
+      <tr><td>Artificial Intelligence</td><td class="num-col">97.0</td><td>O</td><td class="num-col">10</td><td class="num-col">3</td></tr>
+      <tr><td>Compiler Design</td><td class="num-col">67.2</td><td>C</td><td class="num-col">7</td><td class="num-col">4</td></tr>
+      <tr><td>Computer Networks</td><td class="num-col">55.5</td><td>D</td><td class="num-col">6</td><td class="num-col">3</td></tr>
+    </tbody>
+  </table>
+  <p><strong>CGPA = (10×3 + 7×4 + 6×3) / 10 = <span class="ok">7.6</span></strong> — matching exactly.
+     The rescaling matters: only components a student actually has are counted, so a missing
+     quiz does not silently drag the grade down.</p>
+</section>
+
+<!-- ============================================================ 7 -->
+<section id="s7">
+  <h2><span class="num">07</span>Retrieval over documents — RAG</h2>
+  <p><code>app/rag_tool.py</code></p>
+
+  <table>
+    <thead><tr><th>Approach</th><th>Why not</th></tr></thead>
+    <tbody>
+      <tr><td>All policies in the prompt</td><td>Works at 3 documents but does not scale, and wastes tokens on every call.</td></tr>
+      <tr><td>Fine-tune on the policies</td><td>Expensive, needs retraining whenever a rule changes, and still hallucinates specifics.</td></tr>
+      <tr><td>Keyword search</td><td>Fails on paraphrase: "how much do I have to attend" never matches "minimum attendance requirement".</td></tr>
+      <tr><td><span class="ok">Embed + nearest neighbour ✓</span></td><td>Handles paraphrase, updates by re-ingesting a file, grounds the answer in quotable text.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>How embeddings work</h3>
+  <p><code>all-MiniLM-L6-v2</code> is a 6-layer Transformer producing a
+     <strong>384-dimension</strong> vector per text. It was trained so semantically similar
+     sentences land close together — contrastive training on ~1B sentence pairs, pulling
+     true pairs together and pushing random pairs apart.</p>
+  <p>Vectors are <strong>normalised to unit length</strong>, which makes cosine similarity
+     equal the dot product — so "similarity" is just an angle between two directions in 384-D space.</p>
+  <p><strong>Why MiniLM:</strong> 22M parameters, ~90MB, milliseconds on CPU. Larger models
+     (<code>all-mpnet-base-v2</code>, 110M) score a few points higher but are ~5× slower — a
+     bad trade when the point is a responsive voice loop.</p>
+
+  <h3>Chunking</h3>
+  <p>500 characters with 50 characters of overlap, snapped backwards to the nearest space
+     so words are never cut in half.</p>
+  <ul>
+    <li><strong>Too large</strong> → the embedding averages several topics and matches nothing well.</li>
+    <li><strong>Too small</strong> → context is lost mid-sentence.</li>
+    <li><strong>Overlap</strong> exists so a fact sitting on a boundary appears whole in one chunk.</li>
+  </ul>
+  <p>3 documents → <strong>17 chunks</strong>.</p>
+
+  <h3>ChromaDB and HNSW</h3>
+  <p>Chroma stores vectors and metadata and does nearest-neighbour search using
+     <strong>HNSW</strong> (Hierarchical Navigable Small World) — a layered graph where each
+     node links to its neighbours. Search starts in a sparse top layer, greedily walks toward
+     the query, then drops a layer and refines. That gives <em>approximate</em> nearest
+     neighbours in <strong>O(log n)</strong> instead of comparing against every vector.</p>
+  <p>At 17 chunks this is irrelevant — a brute-force NumPy loop would be just as fast.
+     Chroma earns its place by handling <strong>persistence</strong>, <strong>metadata</strong>
+     and <strong>the API</strong> so the code stays small, and by not needing a rewrite if the
+     corpus grows.</p>
+
+  <h3>The confidence floor</h3>
+  <div class="callout warn">
+    <span class="label">Retrieval always returns something</span>
+    <p>An off-topic question was measured pulling chunks at <strong>0.19 similarity</strong>,
+       which the composer would then dutifully answer from. <code>RAG_MIN_SCORE = 0.25</code>
+       drops those, so <em>"Who won the football world cup in 1998?"</em> returns
+       <strong>0 chunks</strong> and an honest "I couldn't find anything about that."</p>
+  </div>
+</section>
+
+<!-- ============================================================ 8 -->
+<section id="s8">
+  <h2><span class="num">08</span>The other three skills</h2>
+
+  <h3>Timetable</h3>
+  <p><strong>No generated SQL.</strong> The shapes of timetable questions are few and fixed,
+     so the queries are hand-written and parameterised: faster, free, impossible to get wrong.
+     The LLM only classifies <em>which day</em> is being asked about, falling back to "today".</p>
+  <p>"Next class" walks forward from now through teaching days until it finds one that has
+     not started yet.</p>
+
+  <h3>Reminders — the only skill that writes</h3>
+<pre><code>model output:  {<span class="str">"action"</span>:<span class="str">"add"</span>, <span class="str">"text"</span>:<span class="str">"submit the AI assignment"</span>, <span class="str">"due"</span>:<span class="str">"friday"</span>}
+                            │
+                   Python parses the date
+                            │
+<span class="kw">INSERT INTO</span> reminders (student_id, text, due_date, created_at, done)
+<span class="kw">VALUES</span> (?, ?, ?, ?, 0)          <span class="cm">← fixed statement, bound parameters</span></code></pre>
+  <p>There is <strong>no path from model output to a write statement</strong>. The text-to-SQL
+     tool keeps its read-only connection and all nine guards. Tests assert the validator still
+     rejects <code>INSERT INTO reminders</code> and that the read-only connection still raises
+     on writing to it.</p>
+
+  <h3>Smalltalk</h3>
+  <p>Greetings, "what can you do?", out-of-scope questions, and <strong>clarifications about
+     the previous answer</strong>. Before this route existed, "hello" was forced into document
+     search and answered from irrelevant policy text.</p>
+</section>
+
+<!-- ============================================================ 9 -->
+<section id="s9">
+  <h2><span class="num">09</span>Answer composition</h2>
+  <p><code>app/compose.py</code></p>
+  <p>Raw rows are <strong>never</strong> spoken — <code>name | avg_percent</code> read aloud is
+     meaningless. Every result passes through a final LLM call producing 1–2 plain sentences,
+     with markdown stripped defensively afterwards.</p>
+
+  <p>The style prompt encodes rules that exist because the model got them wrong:</p>
+  <ul>
+    <li><strong>Round to one decimal.</strong> It once said "74.42857142857143 percent".</li>
+    <li><strong>A mark needs its total and subject</strong> — "30 out of 50 in Computer
+        Networks", never a bare "30".</li>
+    <li><strong>Only claim a tie when numbers are exactly equal</strong>, with worked examples
+        of tied vs merely ranked.</li>
+    <li><strong>Use names or "they"</strong>, never "he"/"she".</li>
+  </ul>
+
+  <h3>The access rule</h3>
+  <p>When the caller is a student, an extra block is added to the <strong>system</strong>
+     prompt (not the user turn — system instructions are followed far more reliably). It draws
+     a line between:</p>
+  <ul>
+    <li><strong>about themselves</strong> → answer fully, including their own totals and averages</li>
+    <li><strong>needs anyone else's data</strong> → refuse, then offer their own figure</li>
+  </ul>
+  <div class="callout warn">
+    <span class="label">This needed two iterations</span>
+    <p>The first wording said "an average across students", which the model over-generalised
+       to <em>any</em> average — so "what is my overall percentage?" started getting refused.
+       There are now tests asserting the rule still permits personal totals.</p>
+  </div>
+</section>
+
+<!-- ============================================================ 10 -->
+<section id="s10">
+  <h2><span class="num">10</span>Text to speech — pyttsx3</h2>
+  <p><code>app/tts.py</code></p>
+  <p>pyttsx3 drives the operating system's own speech engine: <strong>SAPI5</strong> on Windows,
+     NSSpeechSynthesizer on macOS, espeak on Linux. Offline, free, no API.</p>
+
+  <h3>Concurrency, the interesting part</h3>
+  <p>SAPI5 is a <strong>COM</strong> interface, and COM is apartment-threaded — objects belong
+     to the thread that created them. A long-lived engine shared across a web server's worker
+     threads is unreliable. So every synthesis runs on a <strong>fresh short-lived thread that
+     calls <code>CoInitialize()</code> itself</strong>, guarded by a lock so two voices never overlap.</p>
+
+  <table>
+    <thead><tr><th>Option</th><th>Why not</th></tr></thead>
+    <tbody>
+      <tr><td>ElevenLabs / Azure TTS</td><td>Far better voices, but paid and online.</td></tr>
+      <tr><td>Piper</td><td>Genuinely good neural TTS, offline, free. Heavier install and per-voice model downloads. <strong>The interface is built for it</strong> — implement <code>synthesize()</code>, register in <code>_ENGINES</code>, set <code>TTS_ENGINE=piper</code>.</td></tr>
+      <tr><td>Browser <code>speechSynthesis</code></td><td>Free and zero install, but quality varies wildly by browser and the server cannot produce audio for a non-browser client.</td></tr>
+      <tr><td><span class="ok">pyttsx3 ✓</span></td><td>Works out of the box on Windows with no downloads. Robotic, but the brief prioritised "runs after one <code>pip install</code>".</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================================ 11 -->
+<section id="s11">
+  <h2><span class="num">11</span>Authentication</h2>
+  <p><code>app/auth.py</code></p>
+
+  <h3>Passwords — bcrypt</h3>
+  <p>bcrypt is a <strong>deliberately slow</strong> hash built on the Blowfish key schedule.
+     Its cost factor sets how many iterations run; raising it by one doubles the work. The
+     point is that hashing must be expensive enough to make offline brute-force impractical,
+     while still being milliseconds for one login.</p>
+  <p>Each hash embeds a <strong>random salt</strong>, so two users with the same password get
+     different hashes and rainbow tables are useless. There is a test asserting exactly that.</p>
+  <p><strong>Passwords over 72 bytes are rejected</strong>, because bcrypt silently truncates
+     there — a longer password would be weaker than it looks.</p>
+
+  <table>
+    <thead><tr><th>Alternative</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr><td>SHA-256</td><td class="no">Catastrophic for passwords — designed to be <em>fast</em>, so brute-force is cheap.</td></tr>
+      <tr><td>PBKDF2</td><td>Fine, in the standard library, but not memory-hard.</td></tr>
+      <tr><td>scrypt / Argon2id</td><td>Memory-hard, arguably better; Argon2id is the modern recommendation. bcrypt was chosen as the most universally recognised battle-tested option. Either is a defensible upgrade.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Sessions — JWT</h3>
+  <p>A JWT is three base64url parts: <code>header.payload.signature</code>. The signature is
+     <strong>HMAC-SHA256</strong> over the first two using a server secret, so the payload is
+     readable by anyone but <strong>not forgeable</strong> without the key.</p>
+  <p>Claims used: <code>sub</code> (user id), <code>role</code>, <code>tv</code> (token version),
+     <code>iat</code>, <code>exp</code>.</p>
+
+  <div class="callout good">
+    <span class="label">Logout is the interesting bit</span>
+    <p>JWTs are stateless, so a plain token cannot be revoked before it expires. Here every
+       user row carries a <code>token_version</code>, and the token carries a copy. Logging out
+       increments the column, so every outstanding token for that user fails its next check —
+       real revocation without a denylist table that grows forever.</p>
+  </div>
+
+  <div class="callout warn">
+    <span class="label">The honest trade-off</span>
+    <p>A JWT in <code>sessionStorage</code> is <strong>readable by any successful XSS</strong>,
+       which an <code>HttpOnly</code> cookie would not be. JWT was chosen deliberately after
+       that was flagged. Mitigations shipped: <code>sessionStorage</code> (per-tab, cleared on
+       close), 60-minute expiry, real revocation, a strict CSP, and zero third-party scripts.
+       For production, cookies are the safer default.</p>
+  </div>
+
+  <h3>Other guards</h3>
+  <ul>
+    <li><strong>No user enumeration</strong> — unknown username and wrong password return the
+        <em>identical</em> message. A test asserts the strings are equal.</li>
+    <li><strong>Lockout</strong> — 5 failures locks the account for 15 minutes, correct
+        password included.</li>
+    <li><strong>Signup claims a seeded record</strong> — the roll number must exist, the name
+        must match (case- and whitespace-insensitive), and it must not already be claimed.
+        <code>student_id</code> is <code>UNIQUE</code>, so the database enforces the last one too.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 12 -->
+<section id="s12">
+  <h2><span class="num">12</span>Row-level security</h2>
+  <div class="callout">
+    <span class="label">The most technically interesting part of the project</span>
+    <p>The model chooses the SQL, so "don't look at other students" <strong>cannot be a prompt
+       instruction</strong> — it has to be enforced where the data lives.</p>
+  </div>
+
+  <h3>The mechanism</h3>
+  <p>SQLite resolves unqualified table names against the <code>temp</code> schema
+     <em>before</em> <code>main</code>. So creating a temp view with the same name as a table
+     <strong>shadows</strong> it for that connection:</p>
+<pre><code><span class="kw">CREATE TEMP VIEW</span> marks <span class="kw">AS SELECT</span> * <span class="kw">FROM</span> main.marks <span class="kw">WHERE</span> student_id = <span class="str">20</span>;</code></pre>
+  <p>Every ordinary <code>SELECT ... FROM marks</code> now sees one student. Measured on the
+     real database with the <strong>same query text</strong>:</p>
+
+  <table>
+    <thead><tr><th>Query</th><th>As staff</th><th>As student 20</th></tr></thead>
+    <tbody>
+      <tr><td><code>SELECT COUNT(*) FROM students</code></td><td class="num-col">30</td><td class="num-col ok">1</td></tr>
+      <tr><td><code>SELECT COUNT(*) FROM marks</code></td><td class="num-col">150</td><td class="num-col ok">7</td></tr>
+      <tr><td><code>SELECT COUNT(*) FROM attendance</code></td><td class="num-col">200</td><td class="num-col ok">9</td></tr>
+      <tr><td>"rank everyone by average"</td><td>all 30</td><td class="ok">only themselves</td></tr>
+    </tbody>
+  </table>
+
+  <p>Live through the API, with <strong>identical generated SQL</strong> in both cases:</p>
+  <div class="card">
+    <p><strong>"Who has the lowest attendance?"</strong></p>
+    <p><span class="badge">student</span> &nbsp; "I can only show you your own records. Your attendance is 100 percent."</p>
+    <p style="margin-bottom:0"><span class="badge">staff</span> &nbsp; "Pooja Joshi has the lowest attendance at 25 percent."</p>
+  </div>
+
+  <h3>Three details that make it actually hold</h3>
+  <ol>
+    <li><strong><code>main.</code> is rejected by the validator.</strong> A temp view is
+        bypassed entirely by <code>SELECT * FROM main.marks</code>, which returns all 150 rows.
+        This was found during planning and is <strong>the single most important line in the
+        security model</strong> — without it the views are decorative.</li>
+    <li><strong>The credentials table is blanked on every connection</strong>, staff included,
+        and excluded from the schema dump. Otherwise <code>schema_context()</code> would paste
+        password hashes into the prompt and into the UI panel.</li>
+    <li><strong>Prompt sample rows come from the scoped connection.</strong> An unscoped dump
+        would leak other students' names to the model even when the query itself was correctly
+        restricted.</li>
+  </ol>
+
+  <table>
+    <thead><tr><th>Alternative</th><th>Why not</th></tr></thead>
+    <tbody>
+      <tr><td>Prompt instruction</td><td class="no">Trivially bypassed. Indefensible in review.</td></tr>
+      <tr><td>Rewrite the SQL to inject <code>WHERE student_id = ?</code></td><td>Requires parsing SQL correctly, including subqueries and joins. Fragile.</td></tr>
+      <tr><td>A separate database per student</td><td>Correct but absurd at any scale.</td></tr>
+      <tr><td>Postgres row-level security</td><td>The production answer. SQLite has no <code>CREATE POLICY</code>; temp views are the equivalent trick.</td></tr>
+      <tr><td><span class="ok">Temp views + validator ✓</span></td><td>Enforced by the database, testable, ~40 lines.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout bad">
+    <span class="label">Why this is tested directly</span>
+    <p>A regression here fails <strong>silently</strong> — the assistant keeps answering, it
+       just answers with somebody else's data. <code>tests/test_rls.py</code> runs the
+       adversarial queries as a student and asserts only their own rows come back.</p>
+  </div>
+</section>
+
+<!-- ============================================================ 13 -->
+<section id="s13">
+  <h2><span class="num">13</span>The web layer — FastAPI + uvicorn</h2>
+  <table>
+    <thead><tr><th>Alternative</th><th>Why not</th></tr></thead>
+    <tbody>
+      <tr><td>Flask</td><td>Fine and familiar, but sync by default and needs extra libraries for validation and streaming.</td></tr>
+      <tr><td>Django</td><td>An ORM, admin and migrations this project does not need.</td></tr>
+      <tr><td><span class="ok">FastAPI ✓</span></td><td>Type-hint-driven validation (Pydantic rejects malformed requests before any handler runs), native async, and <code>StreamingResponse</code> for NDJSON — all in the standard install.</td></tr>
+    </tbody>
+  </table>
+  <p><strong>uvicorn</strong> is the ASGI server that actually speaks HTTP. Note:
+     <code>uvicorn</code> plain, <em>not</em> <code>uvicorn[standard]</code> — the extras pull in
+     <code>httptools</code> and <code>uvloop</code>, which need a C compiler on some platforms
+     and buy nothing here. That was a real install failure before it was changed.</p>
+
+  <h3>Speculative execution</h3>
+  <p>The router and the tools used to run in sequence, so the SQL generator sat idle waiting
+     for a routing decision. Now the router, the SQL tool and RAG retrieval all start
+     <strong>together</strong> on a shared thread pool; when the router decides, the loser is
+     abandoned.</p>
+  <div class="callout warn">
+    <span class="label">A subtle detail</span>
+    <p>The pool is deliberately <strong>not</strong> a context manager —
+       <code>with ThreadPoolExecutor()</code> blocks on exit until every future finishes,
+       which would defeat the entire purpose.</p>
+  </div>
+  <p>Cost: one wasted SQL-generation call whenever the router picks documents.
+     <code>SPECULATIVE_TOOLS = False</code> disables it if you are near the rate limit.</p>
+</section>
+
+<!-- ============================================================ 14 -->
+<section id="s14">
+  <h2><span class="num">14</span>The frontend</h2>
+  <p>One file, <code>static/index.html</code> — markup, CSS and JS together, no build step.
+     That is not laziness: it means <strong>no bundler, no <code>node_modules</code>, no
+     CDN</strong>, and a strict <code>Content-Security-Policy</code> (<code>default-src 'self'</code>)
+     costs nothing.</p>
+
+  <h3>MediaRecorder</h3>
+  <p><code>getUserMedia</code> opens the microphone; <code>MediaRecorder</code> encodes to
+     <strong>WebM/Opus</strong> in the background and hands back <code>Blob</code> chunks.
+     Opus is a modern low-latency codec — a few seconds of speech is tens of kilobytes.
+     faster-whisper decodes WebM through <strong>PyAV</strong> (FFmpeg bindings), so no
+     explicit conversion step is needed.</p>
+
+  <h3>Web Audio API and the orb</h3>
+  <p><code>AudioContext</code> → <code>AnalyserNode</code> gives real-time samples.
+     <code>getByteTimeDomainData</code> fills a buffer with the waveform, from which peak
+     amplitude is computed every 60ms.</p>
+  <p>That single number drives the orb. <strong>Two sources feed it:</strong> the microphone
+     while recording, and a <code>MediaElementSource</code> tapped off the <code>&lt;audio&gt;</code>
+     element while the assistant speaks — without the second, the orb goes dead exactly when
+     the assistant is talking.</p>
+  <p>The orb itself is <code>&lt;canvas&gt;</code>: three rotating rings whose radius is
+     <code>base + sin(a·3 + t)·k + sin(a·5 − t·1.3)·k2</code>. Two out-of-phase sines make it
+     bulge organically rather than pulse as a perfect circle. The level is eased
+     (<code>shown += (target − shown) × 0.18</code>) so it glides instead of jittering.</p>
+
+  <h3>SQL highlighting</h3>
+  <p>About 20 lines of regex, no library. <strong>The order matters:</strong></p>
+  <ol>
+    <li>escape HTML first (<code>&amp;</code>, <code>&lt;</code>, <code>&gt;</code>, quotes)</li>
+    <li>pull quoted literals out to placeholders, so a keyword inside
+        <code>'Artificial Intelligence'</code> is not recoloured</li>
+    <li>wrap keywords, functions, numbers</li>
+    <li>restore the literals</li>
+  </ol>
+  <div class="callout good">
+    <span class="label">Why it is tested</span>
+    <p>This is the <strong>only</strong> place the app writes <code>innerHTML</code>, and it
+       renders LLM-generated text. It is tested directly, including
+       <code>SELECT '&lt;img src=x onerror=alert(1)&gt;'</code>, which comes out escaped.
+       A pytest guard asserts every other <code>innerHTML</code> write is a constant.</p>
+  </div>
+
+  <h3>Theming</h3>
+  <p>Light and dark are a <strong>token swap</strong>. Because every surface reads from CSS
+     custom properties, the light theme redefines ~20 variables rather than duplicating the
+     stylesheet. Follows the OS by default, remembers a manual choice in
+     <code>localStorage</code>. The orb needs its own palette per theme — a canvas cannot
+     inherit CSS colours.</p>
+</section>
+
+<!-- ============================================================ 15 -->
+<section id="s15">
+  <h2><span class="num">15</span>Conversation memory</h2>
+  <p><code>app/memory.py</code> — the last <strong>6 turns</strong> per account, in process,
+     so <em>"and what about semester 4?"</em> resolves against the previous question.</p>
+  <ul>
+    <li><strong>Keyed by authenticated account</strong>, never by a client-supplied string.
+        The original design took a <code>session_id</code> from the browser — anyone could
+        send anyone else's id and read their history.</li>
+    <li><strong>The SQL prompt sees only 2 turns</strong>, not 6. A long history stapled onto
+        a text-to-SQL prompt measurably degrades accuracy on smaller models: they start
+        answering the <em>earlier</em> question.</li>
+    <li>Idle sessions are evicted after 2 hours with a hard cap of 500 — without that, every
+        browser that ever loaded the page leaked a buffer for the process lifetime.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 16 -->
+<section id="s16">
+  <h2><span class="num">16</span>Performance work</h2>
+  <p>A voice turn originally took <strong>12.4s, all of it before anything appeared</strong>.</p>
+
+  <div class="grid2">
+    <div class="stat"><span class="big">~1.5s</span><span class="lbl">to first text on screen (was 12.4s)</span></div>
+    <div class="stat"><span class="big">5.02s</span><span class="lbl">to first streamed answer token</span></div>
+    <div class="stat"><span class="big">~0.5s</span><span class="lbl">router + compose after moving to 8B</span></div>
+  </div>
+
+  <table>
+    <thead><tr><th>Change</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td>Stream the transcript</td><td>first text at ~1.5s instead of ~12.4s</td></tr>
+      <tr><td>Speculative tools</td><td>router removed from the critical path</td></tr>
+      <tr><td>8B for routing and composition</td><td>those steps 1.4–5.6s → ~0.5s</td></tr>
+      <tr><td>Preload whisper at startup</td><td>first question no longer pays the ~6s model load</td></tr>
+      <tr><td>Stream answer tokens</td><td>first token at 5.02s, typing out live</td></tr>
+      <tr><td>Emit text before synthesising speech</td><td>nobody waits for audio they can read</td></tr>
+    </tbody>
+  </table>
+
+  <table>
+    <thead><tr><th>Stage of a warm turn</th><th>Time</th></tr></thead>
+    <tbody>
+      <tr><td>speech to text</td><td class="num-col">1.33s</td></tr>
+      <tr><td>router (8B)</td><td class="num-col">0.5s</td></tr>
+      <tr><td>tool</td><td class="num-col">varies</td></tr>
+      <tr><td>compose</td><td class="num-col">0.4s</td></tr>
+      <tr><td>speech</td><td class="num-col">0.2s</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout warn">
+    <span class="label">The remaining variance is not this code</span>
+    <p>It is NVIDIA's free tier — see the latency table in §4. Nothing client-side fixes a
+       queue-contended endpoint.</p>
+  </div>
+</section>
+
+<!-- ============================================================ 17 -->
+<section id="s17">
+  <h2><span class="num">17</span>Testing</h2>
+  <p><strong>137 tests, ~16 seconds, no network and no API key</strong> — the LLM is stubbed,
+     so the suite runs anywhere.</p>
+
+  <table>
+    <thead><tr><th>File</th><th>Covers</th></tr></thead>
+    <tbody>
+      <tr><td><code>test_sql_safety.py</code></td><td>the nine guards, real read-only enforcement, row cap</td></tr>
+      <tr><td><code>test_pipeline.py</code></td><td>router parsing, repair-retry, RAG threshold, memory</td></tr>
+      <tr><td><code>test_auth.py</code></td><td>hashing, salting, no-enumeration, lockout, token tamper/expiry/revocation</td></tr>
+      <tr><td><code>test_rls.py</code></td><td class="no">row-level isolation — security critical</td></tr>
+      <tr><td><code>test_skills.py</code></td><td>timetable, reminders, grade/CGPA derivation vs an independent implementation</td></tr>
+      <tr><td><code>test_frontend.py</code></td><td>static guards on the single-file UI</td></tr>
+      <tr><td><code>highlight_check.js</code></td><td>the SQL highlighter, including XSS</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Three principles worth defending</h3>
+  <ol>
+    <li><strong>Every bug found got a test.</strong> The list in §18 maps one-to-one onto tests.</li>
+    <li><strong>Tests verify against independent implementations, not themselves.</strong>
+        <code>test_skills.py</code> re-implements the grading policy in Python and asserts the
+        SQL views agree — a bug would have to be made identically twice.</li>
+    <li><strong>Guards are proven to fail.</strong> After adding the <code>[hidden]</code> CSS
+        fix, the guard was run against the <em>broken</em> stylesheet to confirm it fails.
+        A test that passes either way is worthless.</li>
+  </ol>
+</section>
+
+<!-- ============================================================ 18 -->
+<section id="s18">
+  <h2><span class="num">18</span>Bugs found, and what they teach</h2>
+  <p>Each is a real defect caught by testing, with a root cause.</p>
+
+  <table>
+    <thead><tr><th>Bug</th><th>Root cause</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr><td>"Average score in Compiler Design = <strong>38</strong>"</td><td><code>AVG(score)</code> mixed a /20 quiz with a /100 final</td><td>normalise before averaging → 69.5%</td></tr>
+      <tr><td>"<strong>8</strong> students scored above 80"</td><td><code>COUNT(*)</code> counted mark <em>rows</em>, not students</td><td><code>COUNT(DISTINCT student_id)</code> → 7</td></tr>
+      <tr><td>"<strong>0</strong> students scored above 80 in AI"</td><td><code>LOWER(name) LIKE '%AI%'</code> — uppercase pattern against a lowercased column, and "AI" is not a substring of "artificial intelligence"</td><td>dump exact values, expand abbreviations</td></tr>
+      <tr><td>"Aarav Bose has the lowest attendance, <strong>0.0%</strong>"</td><td><code>LEFT JOIN</code> gave NULL for a student with no records; SQLite sorts NULL first</td><td><code>INNER JOIN</code> + <code>HAVING COUNT(*) &gt;= 3</code></td></tr>
+      <tr><td>"Top three students" returned <strong>arbitrary names</strong></td><td><code>ORDER BY id</code> — ranked by nothing</td><td>five-step ranking rule; must select and order by the measure</td></tr>
+      <tr><td>"Your <strong>CGPA</strong> is 74.4"</td><td>no CGPA existed, so it relabelled a percentage</td><td>derive from the published policy → 7.6</td></tr>
+      <tr><td>Login succeeded but the page never changed</td><td><code>[hidden]</code> loses to any author <code>display</code> rule</td><td><code>[hidden] { display: none !important }</code></td></tr>
+      <tr><td>Hands-free never responded</td><td>recording started <em>after</em> speech was detected, clipping "Hey" off the wake phrase</td><td>record continuously so clips carry pre-roll</td></tr>
+      <tr><td>Coughs got transcribed</td><td>utterance length measured to the <em>endpoint</em>, ~1s of silence later</td><td>measure to the last loud frame</td></tr>
+      <tr><td>Signup "not working"</td><td>no way to discover a valid roll number after <code>/students</code> was removed</td><td>show a demo pair on the form</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <span class="label">Two meta-lessons</span>
+    <p><strong>A whole class of bug was invisible to both test layers.</strong> The JS harness
+       executes the script without CSS; pytest never opens a browser. The login bug passed
+       everything and still looked completely broken. That gap is why
+       <code>test_frontend.py</code> exists.</p>
+    <p><strong>Prompts can poison themselves.</strong> The composer prompt literally contained
+       <em>"if it says the user needs to sign in, tell them that"</em> — which primed the model
+       to say it to a signed-in student with a perfectly good timetable.</p>
+  </div>
+</section>
+
+<!-- ============================================================ 19 -->
+<section id="s19">
+  <h2><span class="num">19</span>Honest limitations</h2>
+  <p>Worth stating plainly rather than being caught out.</p>
+  <ul>
+    <li><strong>Whisper <code>base</code> mishears often.</strong> The single biggest quality
+        limit. <code>small</code> is a one-line change at ~3× the time.</li>
+    <li><strong>The 70B endpoint is unpredictable</strong> on the free tier — occasional 30s turns.</li>
+    <li><strong>JWT in <code>sessionStorage</code> is XSS-readable.</strong> A deliberate,
+        documented choice; cookies are safer.</li>
+    <li><strong>Signup is not identity proofing.</strong> Roll number + matching name is a
+        demo-grade check.</li>
+    <li><strong>Single-process memory.</strong> Conversation history dies on restart and does
+        not survive multiple workers.</li>
+    <li><strong>Hindi is claimed, not verified.</strong> The hardcoded <code>language="en"</code>
+        was removed and auto-detection added, but it was <strong>never tested with real Hindi
+        speech</strong>.</li>
+    <li><strong>Hands-free was removed.</strong> The server-side wake gating worked (verified
+        with synthesized speech); the browser-side voice-activity detection was never tuned
+        against a real microphone in a real room.</li>
+    <li><strong>Docker is written but unbuilt</strong> — Docker was unavailable in the
+        development environment.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 20 -->
+<section id="s20">
+  <h2><span class="num">20</span>File map</h2>
+<pre><code>app/
+  main.py            612  FastAPI app, NDJSON event stream, endpoints
+  sql_tool.py        576  text-to-SQL, guards, RLS views, grade views
+  auth.py            329  bcrypt, JWT, signup, login, lockout
+  compose.py         303  spoken-answer composition, streaming
+  rag_tool.py        229  chunk, embed, ingest, retrieve, threshold
+  llm.py             208  NIM client, retries, JSON + streaming helpers
+  reminder_tool.py   202  the only write path
+  tts.py             190  pyttsx3 behind a swappable interface
+  timetable_tool.py  149  fixed queries, no generated SQL
+  identity.py        135  verified token -&gt; principal
+  config.py          119  every tunable, with the measurement behind it
+  router.py          104  5-way classification
+  memory.py           96  per-account history, TTL eviction
+  stt.py              77  faster-whisper wrapper
+  smalltalk.py        67  greetings, capabilities, clarifications
+data/seed_db.py           reproducible sample data (fixed seed 42)
+static/index.html         the entire frontend
+tests/                    137 tests + 1 node check</code></pre>
+</section>
+
+</main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- theme: follow the OS, remember a manual choice --------------------
+  var root = document.documentElement;
+  var btn = document.getElementById("theme");
+  function apply(name) {
+    root.setAttribute("data-theme", name);
+    btn.textContent = name === "light" ? "◑" : "◐";
+    btn.title = name === "light" ? "Switch to dark" : "Switch to light";
+  }
+  var saved = null;
+  try { saved = localStorage.getItem("doc_theme"); } catch (e) {}
+  var prefersLight = window.matchMedia
+    && window.matchMedia("(prefers-color-scheme: light)").matches;
+  apply(saved || (prefersLight ? "light" : "dark"));
+  btn.addEventListener("click", function () {
+    var next = root.getAttribute("data-theme") === "light" ? "dark" : "light";
+    apply(next);
+    try { localStorage.setItem("doc_theme", next); } catch (e) {}
+  });
+
+  // ---- scrollspy: highlight the section currently in view ----------------
+  var links = Array.prototype.slice.call(document.querySelectorAll("nav a"));
+  var byId = {};
+  links.forEach(function (a) { byId[a.getAttribute("href").slice(1)] = a; });
+
+  if ("IntersectionObserver" in window) {
+    var seen = {};
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { seen[e.target.id] = e.isIntersecting; });
+      // Highlight the topmost section that is currently on screen.
+      var current = null;
+      document.querySelectorAll("section").forEach(function (s) {
+        if (!current && seen[s.id]) current = s.id;
+      });
+      links.forEach(function (a) { a.classList.remove("on"); });
+      if (current && byId[current]) byId[current].classList.add("on");
+    }, { rootMargin: "-10% 0px -70% 0px", threshold: 0 });
+    document.querySelectorAll("section").forEach(function (s) { io.observe(s); });
+  }
+})();
+</script>
+</body>
+</html>

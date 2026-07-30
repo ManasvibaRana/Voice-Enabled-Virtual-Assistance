@@ -1,0 +1,1807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Voice Assistant — College Agent</title>
+<style>
+  /* ===================================================================
+     Design tokens
+     Two hues only - indigo for the product, cyan for "live" - against a
+     near-black canvas. Everything else is opacity on white, so surfaces
+     stack without inventing new greys.
+     =================================================================== */
+  :root {
+    --ink: #05060a;
+    --ink-2: #090b12;
+    --text: #f2f4f9;
+    --muted: #8990a6;
+    --faint: #5d6478;
+
+    --indigo: #6d8bff;
+    --indigo-lo: rgba(109, 139, 255, .14);
+    --cyan: #4cc9f0;
+    --cyan-lo: rgba(76, 201, 240, .13);
+    --violet: #b98cff;
+    --amber: #f7b955;
+    --green: #3ddc97;
+    --red: #ff7a7a;
+
+    --hair: rgba(255, 255, 255, .07);
+    --hair-2: rgba(255, 255, 255, .045);
+    --raise: rgba(255, 255, 255, .035);
+    --raise-2: rgba(255, 255, 255, .06);
+    --sheen: rgba(255, 255, 255, .06);   /* the 1px catch of light on a surface */
+    --sunken: rgba(0, 0, 0, .35);        /* inputs, code blocks, table wells */
+    --grain: .28;
+    --aurora: .20;
+    --scroll: rgba(255,255,255,.13);
+    --scroll-hi: rgba(255,255,255,.24);
+
+    --r-sm: 10px;
+    --r: 16px;
+    --r-lg: 22px;
+    --pill: 999px;
+
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    --shadow-lg: 0 2px 6px rgba(0,0,0,.4), 0 30px 70px rgba(0,0,0,.55);
+    --ease: cubic-bezier(.22, 1, .36, 1);
+    --spring: cubic-bezier(.34, 1.56, .64, 1);
+  }
+  /* Light theme. Same two hues, darkened enough to hold contrast on white. */
+  :root[data-theme="light"] {
+    --ink: #f7f8fb;
+    --ink-2: #ffffff;
+    --text: #131722;
+    --muted: #5a6276;
+    --faint: #858da3;
+
+    --indigo: #4f6ae0;
+    --indigo-lo: rgba(79, 106, 224, .10);
+    --cyan: #0d8fb8;
+    --cyan-lo: rgba(13, 143, 184, .10);
+    --violet: #8b5cf6;
+    --amber: #b4700c;
+    --green: #0f9d69;
+    --red: #d64545;
+
+    --hair: rgba(16, 22, 40, .10);
+    --hair-2: rgba(16, 22, 40, .07);
+    --raise: rgba(255, 255, 255, .75);
+    --raise-2: rgba(255, 255, 255, .95);
+    --sheen: rgba(255, 255, 255, .9);
+    --sunken: rgba(16, 22, 40, .045);
+    --grain: .10;
+    --aurora: .11;
+    --scroll: rgba(16,22,40,.18);
+    --scroll-hi: rgba(16,22,40,.32);
+
+    --shadow: 0 1px 2px rgba(16,22,40,.06), 0 8px 24px rgba(16,22,40,.07);
+    --shadow-lg: 0 2px 6px rgba(16,22,40,.08), 0 30px 70px rgba(16,22,40,.14);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+  * { box-sizing: border-box; }
+  /* The browser hides [hidden] elements with `display: none`, but any author
+     rule that sets `display` outranks it. #gate, main and .who-picker all do,
+     so without this the sign-in panel stays on screen after a successful
+     login. Keep this rule above everything that sets `display`. */
+  [hidden] { display: none !important; }
+
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font: 15px/1.6 "Segoe UI Variable Text", "Segoe UI", Inter, system-ui,
+          -apple-system, sans-serif;
+    background: var(--ink);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "cv05" 1, "ss01" 1;
+    overflow: hidden;
+  }
+
+  /* Slow aurora behind everything, plus a fine grain so large dark areas are
+     not flat. Both are pure CSS/inline SVG - no network requests. */
+  body::before {
+    content: ""; position: fixed; inset: -20%; z-index: -2; pointer-events: none;
+    background:
+      radial-gradient(38% 44% at 22% 18%, rgba(109,139,255,var(--aurora)), transparent 70%),
+      radial-gradient(32% 40% at 82% 8%,  rgba(76,201,240,.14), transparent 70%),
+      radial-gradient(40% 45% at 70% 88%, rgba(185,140,255,.11), transparent 72%);
+    filter: blur(20px);
+    animation: drift 34s var(--ease) infinite alternate;
+  }
+  @keyframes drift {
+    50%  { transform: translate3d(2%, -2%, 0) scale(1.06); }
+    100% { transform: translate3d(-2%, 2%, 0) scale(1.02); }
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    opacity: var(--grain); mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+  }
+
+  /* Hairline that catches light at the top, like a real raised surface. */
+  .surface {
+    background: linear-gradient(180deg, var(--raise-2), var(--raise));
+    border: 1px solid var(--hair);
+    border-radius: var(--r);
+    box-shadow: var(--shadow), inset 0 1px 0 var(--sheen);
+  }
+
+  /* ---------------- header ---------------- */
+  header {
+    position: relative; z-index: 5;
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 26px; height: 58px;
+    border-bottom: 1px solid var(--hair-2);
+  }
+  header h1 {
+    font-size: 15px; margin: 0; font-weight: 600; letter-spacing: -.015em;
+    display: flex; align-items: center; gap: 10px; color: var(--text);
+  }
+  header h1::before {
+    content: ""; width: 20px; height: 20px; border-radius: 7px;
+    background: conic-gradient(from 140deg, var(--indigo), var(--cyan), var(--violet), var(--indigo));
+    box-shadow: 0 0 18px rgba(109,139,255,.45), inset 0 0 6px rgba(255,255,255,.4);
+  }
+  #status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--faint); }
+  #status .dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--faint);
+    box-shadow: 0 0 0 3px rgba(255,255,255,.04);
+  }
+  #status.ok .dot { background: var(--green); box-shadow: 0 0 10px rgba(61,220,151,.6); }
+  #status.bad .dot { background: var(--red); box-shadow: 0 0 10px rgba(255,122,122,.6); }
+
+  .who-picker {
+    margin-left: auto; display: flex; align-items: center; gap: 9px; font-size: 13px;
+  }
+  #whoami-name { font-weight: 600; letter-spacing: -.01em; }
+  .role-chip {
+    font-size: 10px; padding: 2px 8px; border-radius: var(--pill);
+    text-transform: uppercase; letter-spacing: .09em; font-weight: 650;
+    background: var(--indigo-lo); color: #a9bcff; border: 1px solid rgba(109,139,255,.28);
+  }
+  .role-chip.staff {
+    background: rgba(247,185,85,.12); color: #f5cd8c; border-color: rgba(247,185,85,.3);
+  }
+  .linkish {
+    background: none; border: none; padding: 0; color: var(--cyan);
+    cursor: pointer; font-size: 13px; text-decoration: none;
+    border-bottom: 1px solid rgba(76,201,240,.35);
+  }
+  .linkish:hover { color: #fff; border-color: #fff; }
+
+  /* ---------------- layout ---------------- */
+  main {
+    position: relative; display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr);
+    grid-template-rows: auto 1fr auto;
+    grid-template-areas: "convo panel";
+    gap: 20px; width: min(1340px, 100%); margin: 0 auto;
+    padding: 0 26px 24px; height: calc(100vh - 58px); min-height: 0;
+  }
+  .card, .col { display: contents; }
+  .card h2 { display: none; }
+  /* The conversation column is everything except the panel. */
+  #pipeline, #transcript, #controls { grid-column: 1; }
+  #pipeline   { grid-row: 1; }
+  #transcript { grid-row: 2; }
+  #controls   { grid-row: 3; }
+
+  #panel {
+    grid-area: panel; grid-row: 1 / 4; align-self: stretch;
+    display: flex; flex-direction: column; min-height: 0; margin-top: 14px;
+    background: linear-gradient(180deg, var(--raise-2), var(--raise));
+    border: 1px solid var(--hair); border-radius: var(--r);
+    box-shadow: var(--shadow), inset 0 1px 0 var(--sheen);
+  }
+  .panel-head {
+    padding: 15px 18px; border-bottom: 1px solid var(--hair-2); flex: 0 0 auto;
+  }
+  .panel-head h2 {
+    display: block; margin: 0; padding: 0; border: none;
+    font-size: 10px; font-weight: 650; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  @media (max-width: 1080px) {
+    main {
+      grid-template-columns: 1fr; grid-template-areas: "convo"; height: auto;
+      min-height: calc(100vh - 58px);
+    }
+    #panel { grid-row: auto; max-height: 46vh; }
+  }
+
+  /* ---------------- pipeline ---------------- */
+  #pipeline {
+    display: flex; gap: 5px; flex-wrap: wrap; justify-content: center;
+    max-height: 0; opacity: 0; overflow: hidden; padding: 0;
+    transition: max-height .45s var(--ease), opacity .3s var(--ease), padding .45s var(--ease);
+  }
+  #pipeline.live { max-height: 46px; opacity: 1; padding: 14px 0 4px; }
+  .stage {
+    display: flex; align-items: center; gap: 7px; font-size: 11px;
+    color: var(--faint); padding: 4px 11px 4px 8px; border-radius: var(--pill);
+    border: 1px solid transparent; letter-spacing: .02em;
+    transition: all .4s var(--ease);
+  }
+  .stage i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
+  .stage b { font-weight: 650; font-variant-numeric: tabular-nums; color: var(--text); }
+  .stage.active {
+    color: var(--cyan); border-color: rgba(76,201,240,.3); background: var(--cyan-lo);
+  }
+  .stage.active i { animation: ping 1.1s ease-out infinite; }
+  .stage.done { color: var(--green); border-color: rgba(61,220,151,.16); }
+  @keyframes ping {
+    0%   { box-shadow: 0 0 0 0 rgba(76,201,240,.5); }
+    100% { box-shadow: 0 0 0 8px rgba(76,201,240,0); }
+  }
+
+  /* ---------------- conversation ---------------- */
+  #transcript {
+    overflow-y: auto; padding: 18px 2px 10px;
+    scroll-behavior: smooth; min-height: 0;
+  }
+  .msg {
+    margin-bottom: 22px; max-width: 86%;
+    animation: rise .45s var(--ease) both;
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+  .msg .who {
+    font-size: 10px; color: var(--faint); margin-bottom: 6px;
+    letter-spacing: .13em; text-transform: uppercase; font-weight: 650;
+  }
+  .msg .bubble {
+    padding: 13px 16px; border-radius: 4px 16px 16px 16px; white-space: pre-wrap;
+    background: linear-gradient(180deg, var(--raise-2), var(--raise));
+    border: 1px solid var(--hair);
+    box-shadow: inset 0 1px 0 var(--sheen);
+    font-size: 15px; line-height: 1.62;
+  }
+  .msg.user { margin-left: auto; }
+  .msg.user .who { text-align: right; }
+  .msg.user .bubble {
+    border-radius: 16px 4px 16px 16px;
+    background: linear-gradient(180deg, rgba(109,139,255,.20), rgba(109,139,255,.10));
+    border-color: rgba(109,139,255,.26);
+  }
+  .msg.error .bubble {
+    border-color: rgba(255,122,122,.35); color: #ffc9c9;
+    background: rgba(255,122,122,.07);
+  }
+  .msg.ignored { opacity: .4; }
+  .msg.ignored .bubble { border-style: dashed; font-style: italic; background: none; }
+  .msg.streaming .bubble::after {
+    content: ""; display: inline-block; width: 2px; height: 1.05em;
+    background: var(--cyan); margin-left: 3px; vertical-align: text-bottom;
+    border-radius: 1px; animation: caret .9s steps(2) infinite;
+  }
+  @keyframes caret { 50% { opacity: 0; } }
+
+  .msg .tag {
+    display: inline-flex; align-items: center; gap: 7px; margin-top: 10px;
+    font-size: 11px; padding: 4px 12px; border-radius: var(--pill); cursor: pointer;
+    border: 1px solid var(--hair); color: var(--muted);
+    background: rgba(255,255,255,.025); letter-spacing: .02em;
+    transition: all .22s var(--ease);
+  }
+  .msg .tag::before {
+    content: ""; width: 5px; height: 5px; border-radius: 50%;
+    background: currentColor; box-shadow: 0 0 8px currentColor;
+  }
+  .msg .tag:hover {
+    border-color: rgba(109,139,255,.45); background: var(--indigo-lo);
+    color: var(--text); transform: translateY(-1px);
+  }
+  .msg .tag.db { color: #a9bcff; }
+  .msg .tag.rag { color: #86e7bd; }
+  .msg .tag.tt { color: #f5cd8c; }
+  .msg .tag.rem { color: #d3b2ff; }
+  .msg .tag.chat { color: #b9c0d0; }
+  .msg .lang {
+    display: inline-block; margin-left: 8px; font-size: 10px; padding: 2px 8px;
+    border-radius: var(--pill); border: 1px solid var(--hair); color: var(--faint);
+    text-transform: uppercase; letter-spacing: .08em;
+  }
+  .msg .edit {
+    display: inline-block; margin-top: 7px; margin-left: 9px; font-size: 11px;
+    color: var(--faint); cursor: pointer; border-bottom: 1px dotted var(--faint);
+  }
+  .msg .edit:hover { color: var(--cyan); border-color: var(--cyan); }
+  .msg.user .edit { float: right; }
+
+  /* ---------------- empty state / hero ---------------- */
+  .empty { color: var(--faint); font-style: italic; }
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; height: 100%; gap: 20px; padding: 10px 0;
+    animation: rise .6s var(--ease) both;
+  }
+  .empty-state .lead {
+    margin: 0; color: var(--muted); font-size: 17px; max-width: 34ch;
+    line-height: 1.55; letter-spacing: -.01em;
+  }
+  #details .empty-state { height: auto; text-align: left; align-items: flex-start; padding: 4px 0; }
+  #details .empty-state .lead { font-size: 14px; max-width: none; }
+  .suggestions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .chip {
+    padding: 8px 15px; border-radius: var(--pill); font-size: 13px;
+    background: rgba(255,255,255,.03); border: 1px solid var(--hair);
+    color: var(--muted); transition: all .22s var(--ease);
+  }
+  .chip:hover {
+    border-color: rgba(109,139,255,.45); background: var(--indigo-lo);
+    color: var(--text); transform: translateY(-2px);
+  }
+
+  /* ---------------- composer ---------------- */
+  #controls { padding-top: 8px; flex: 0 0 auto; padding-bottom: 2px; }
+  .row { display: flex; gap: 10px; align-items: center; }
+  .row + .row { margin-top: 11px; }
+
+  .composer {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 8px 8px 12px; border-radius: var(--pill);
+    background: linear-gradient(180deg, var(--raise-2), var(--raise));
+    border: 1px solid var(--hair);
+    box-shadow: var(--shadow), inset 0 1px 0 var(--sheen);
+    transition: border-color .3s var(--ease), box-shadow .3s var(--ease);
+  }
+  .composer:focus-within {
+    border-color: rgba(109,139,255,.45);
+    box-shadow: var(--shadow), 0 0 0 4px rgba(109,139,255,.12),
+                inset 0 1px 0 rgba(255,255,255,.08);
+  }
+  #orb {
+    width: 44px; height: 44px; flex: 0 0 auto; cursor: pointer;
+    user-select: none; touch-action: none; border-radius: 50%;
+    transition: width .5s var(--spring), height .5s var(--spring),
+                transform .2s var(--ease);
+  }
+  #orb:hover { transform: scale(1.07); }
+  #orb:active { transform: scale(.95); }
+
+  /* Before the first question the orb is the hero, sitting large above a
+     centred prompt. It shrinks into the composer once talking starts. */
+  body.no-convo .composer {
+    flex-direction: column; border-radius: var(--r-lg); gap: 16px;
+    padding: 26px 18px 14px;
+  }
+  body.no-convo #orb { width: 132px; height: 132px; }
+  body.no-convo .composer .input-line { width: 100%; }
+  body.no-convo #transcript { padding-bottom: 0; }
+
+  .input-line { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+  input[type=text] {
+    flex: 1; padding: 11px 4px; border: none; background: transparent;
+    color: var(--text); font-size: 15.5px; min-width: 0; letter-spacing: -.005em;
+  }
+  input[type=text]:focus { outline: none; }
+  input[type=text]::placeholder { color: var(--faint); }
+
+  button {
+    padding: 9px 16px; border-radius: var(--r-sm); border: 1px solid var(--hair);
+    background: rgba(255,255,255,.04); color: var(--text); cursor: pointer;
+    font-size: 13.5px; font-family: inherit; letter-spacing: -.005em;
+    transition: all .2s var(--ease);
+  }
+  button:hover:not(:disabled) { background: rgba(255,255,255,.08); border-color: var(--raise-2); }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:disabled { opacity: .3; cursor: not-allowed; }
+
+  #send {
+    background: linear-gradient(180deg, #7d99ff, var(--indigo));
+    border-color: rgba(255,255,255,.14); color: #fff; font-weight: 600;
+    border-radius: var(--pill); padding: 10px 20px; flex: 0 0 auto;
+    box-shadow: 0 4px 14px rgba(109,139,255,.35), inset 0 1px 0 rgba(255,255,255,.3);
+  }
+  #send:hover:not(:disabled) { filter: brightness(1.1); }
+
+  .toolbar { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  #talk {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 9px;
+    font-weight: 600; padding: 12px 20px; line-height: 1.2; border-radius: var(--pill);
+    background: var(--indigo-lo); border-color: rgba(109,139,255,.3); font-size: 14px;
+    user-select: none; touch-action: none;
+  }
+  #talk::before {
+    content: ""; width: 9px; height: 9px; border-radius: 50%;
+    background: var(--indigo); box-shadow: 0 0 10px var(--indigo); flex: 0 0 auto;
+  }
+  #talk small { font-weight: 400; font-size: 12px; color: var(--faint); }
+  #talk.recording::before { background: var(--red); box-shadow: 0 0 12px var(--red); animation: ping 1s infinite; }
+  #talk.recording { background: rgba(255,122,122,.18); border-color: rgba(255,122,122,.45); }
+  #talk.listening { background: rgba(61,220,151,.15); border-color: rgba(61,220,151,.38); }
+  button.icon {
+    padding: 0; width: 34px; height: 34px; font-size: 13px; border-radius: var(--r-sm);
+    color: var(--faint); background: transparent; border-color: transparent;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  button.icon:hover:not(:disabled) { color: var(--text); background: rgba(255,255,255,.07); }
+  .note { color: var(--faint); font-size: 12px; margin-top: 9px; }
+  #hint { margin-top: 8px; margin-bottom: 0; }
+  #hint { text-align: center; }
+
+  /* ---------------- settings ---------------- */
+  #settings {
+    margin-top: 12px; padding: 15px 16px; border-radius: var(--r);
+    background: var(--sunken); border: 1px solid var(--hair);
+    animation: rise .3s var(--ease) both;
+  }
+  #settings .row { margin-top: 0; }
+  #settings .row + .row { margin-top: 11px; }
+  #settings label { min-width: 78px; }
+  select, input[type=range] {
+    flex: 1; background: var(--sunken); color: var(--text);
+    border: 1px solid var(--hair); border-radius: var(--r-sm);
+    padding: 7px 10px; min-width: 0; font-family: inherit; font-size: 13px;
+  }
+  input[type=range] { padding: 0; accent-color: var(--indigo); }
+  input[type=checkbox] { accent-color: var(--indigo); }
+
+
+  #details { flex: 1; overflow-y: auto; padding: 20px; }
+  .detail-block + .detail-block {
+    margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--hair-2);
+  }
+  .detail-block h3 {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .14em;
+    color: var(--faint); margin: 0 0 11px; font-weight: 650;
+  }
+  .pill {
+    display: inline-block; padding: 5px 13px; border-radius: var(--pill);
+    font-size: 12.5px; font-weight: 600; letter-spacing: -.005em;
+    background: var(--indigo-lo); color: #a9bcff; border: 1px solid rgba(109,139,255,.3);
+  }
+  .pill.rag  { background: rgba(61,220,151,.12); color: #86e7bd; border-color: rgba(61,220,151,.3); }
+  .pill.tt   { background: rgba(247,185,85,.12); color: #f5cd8c; border-color: rgba(247,185,85,.3); }
+  .pill.rem  { background: rgba(185,140,255,.12); color: #d3b2ff; border-color: rgba(185,140,255,.3); }
+  .pill.chat { background: rgba(255,255,255,.06); color: #c6ccd9; border-color: var(--hair); }
+
+  pre, code { font-family: "Cascadia Mono", Consolas, ui-monospace, monospace; }
+  pre {
+    margin: 0; padding: 14px 15px; background: var(--sunken);
+    border: 1px solid var(--hair); border-radius: var(--r-sm);
+    overflow-x: auto; font-size: 12.5px; line-height: 1.7;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .kw  { color: #8aa6ff; font-weight: 650; }
+  .fn  { color: var(--cyan); }
+  .str { color: #86e7bd; }
+  .num { color: var(--amber); }
+
+  .chunk {
+    background: var(--sunken); border: 1px solid var(--hair);
+    border-radius: var(--r-sm); padding: 13px 15px; font-size: 13.5px;
+    margin-bottom: 10px; line-height: 1.6;
+  }
+  .chunk .meta {
+    color: var(--faint); font-size: 10.5px; margin-bottom: 9px;
+    display: flex; align-items: center; gap: 9px;
+    letter-spacing: .06em; text-transform: uppercase;
+  }
+  .chunk .meta .src { color: var(--cyan); }
+  .relevance {
+    flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,.07);
+    overflow: hidden; max-width: 96px;
+  }
+  .relevance i {
+    display: block; height: 100%; border-radius: 2px;
+    background: linear-gradient(90deg, var(--indigo), var(--cyan));
+  }
+
+  table.rows { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  table.rows th, table.rows td {
+    border-bottom: 1px solid var(--hair-2); padding: 8px 11px;
+    text-align: left; white-space: nowrap;
+  }
+  table.rows th {
+    color: var(--faint); font-weight: 650; font-size: 10px;
+    text-transform: uppercase; letter-spacing: .1em;
+    position: sticky; top: 0; background: var(--ink-2);
+  }
+  table.rows tbody tr:hover td { background: rgba(255,255,255,.035); }
+  table.rows td { font-variant-numeric: tabular-nums; }
+  .scroll-x {
+    overflow: auto; max-height: 320px; border: 1px solid var(--hair);
+    border-radius: var(--r-sm); background: var(--sunken);
+  }
+
+  .timings { display: flex; flex-direction: column; gap: 9px; }
+  .timing-bar {
+    display: flex; height: 9px; border-radius: 5px; overflow: hidden;
+    background: var(--sunken); box-shadow: inset 0 1px 2px rgba(0,0,0,.18);
+  }
+  .timing-bar span { transition: width .6s var(--ease); min-width: 2px; }
+  .timing-key { display: flex; flex-wrap: wrap; gap: 5px 14px; font-size: 11px; }
+  .timing-key i {
+    width: 8px; height: 8px; border-radius: 2px; display: inline-block;
+    margin-right: 6px; vertical-align: -1px;
+  }
+  .timing-key span { color: var(--faint); }
+  .timing-key b { color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
+
+  .err-text { color: var(--red); font-size: 13px; }
+  .attempt {
+    font-size: 12px; color: var(--faint); margin-top: 8px;
+    display: flex; gap: 8px; align-items: baseline;
+  }
+  .attempt .n {
+    flex: 0 0 auto; font-size: 9.5px; padding: 2px 8px; border-radius: var(--pill);
+    border: 1px solid var(--hair); color: var(--faint);
+    text-transform: uppercase; letter-spacing: .08em;
+  }
+  .attempt.bad .n { color: var(--red); border-color: rgba(255,122,122,.35); }
+  .attempt.good .n { color: var(--green); border-color: rgba(61,220,151,.35); }
+
+  /* ---------------- sign in ---------------- */
+  #gate {
+    position: fixed; inset: 0; z-index: 50; display: flex;
+    align-items: center; justify-content: center; padding: 22px;
+  }
+  .gate-card {
+    width: 100%; max-width: 400px; padding: 32px 30px;
+    background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.025));
+    border: 1px solid var(--hair); border-radius: var(--r-lg);
+    box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255,255,255,.07);
+    animation: rise .5s var(--ease) both;
+  }
+  .gate-card h2 {
+    margin: 0 0 6px; font-size: 23px; font-weight: 620; letter-spacing: -.025em;
+  }
+  .gate-card .note { margin: 0 0 20px; font-size: 13.5px; }
+  .field { display: block; margin-bottom: 14px; }
+  .field span {
+    display: block; font-size: 11px; color: var(--muted); margin-bottom: 7px;
+    letter-spacing: .06em; text-transform: uppercase; font-weight: 600;
+  }
+  .field input {
+    width: 100%; padding: 12px 14px; border-radius: var(--r-sm); font-size: 15px;
+    border: 1px solid var(--hair); background: var(--sunken); color: var(--text);
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .field input:focus {
+    outline: none; border-color: rgba(109,139,255,.5);
+    box-shadow: 0 0 0 4px rgba(109,139,255,.12);
+  }
+  button.primary {
+    width: 100%; margin-top: 4px; padding: 13px; font-weight: 600; font-size: 15px;
+    border-radius: var(--r-sm); color: #fff;
+    background: linear-gradient(180deg, #7d99ff, var(--indigo));
+    border-color: rgba(255,255,255,.14);
+    box-shadow: 0 6px 18px rgba(109,139,255,.35), inset 0 1px 0 rgba(255,255,255,.3);
+  }
+  button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+  .gate-error { color: var(--red); font-size: 13px; min-height: 18px; margin: 12px 0 0; }
+  .demo-note {
+    margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--hair-2);
+    line-height: 1.65;
+  }
+  .demo-note code, .hint-box code { color: var(--cyan); }
+  .hint-box {
+    background: var(--sunken); border: 1px solid var(--hair); border-radius: var(--r-sm);
+    padding: 12px 14px; margin-bottom: 16px !important; line-height: 1.6;
+  }
+
+  /* ---------------- finishing ---------------- */
+  ::selection { background: rgba(109,139,255,.4); }
+  :focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; border-radius: 8px; }
+  * { scrollbar-width: thin; scrollbar-color: var(--scroll) transparent; }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-thumb {
+    background: var(--scroll); border-radius: 6px;
+    border: 3px solid transparent; background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover { background: var(--scroll-hi); background-clip: content-box; }
+  *::-webkit-scrollbar-track { background: transparent; }
+
+  @media (max-width: 720px) {
+    header { padding: 12px 16px; }
+    main { padding: 0 16px 18px; }
+    body.no-convo #orb { width: 104px; height: 104px; }
+    .empty-state .lead { font-size: 15.5px; }
+
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>College Assistant</h1>
+  <span id="status" title="system status"><span class="dot"></span><span id="status-text"></span></span>
+  <span class="who-picker" id="whoami" hidden>
+    <b id="whoami-name"></b><span class="role-chip" id="whoami-role"></span>
+    <button id="theme" class="icon" title="Switch theme" aria-label="Switch theme">&#9681;</button>
+    <button id="logout" class="icon" title="Log out" aria-label="Log out">&#9099;</button>
+  </span>
+</header>
+
+<section id="gate">
+  <div class="gate-card">
+    <h2 id="gate-title">Sign in</h2>
+    <p class="note" id="gate-sub">Your marks and attendance are private to your account.</p>
+
+    <div id="login-form">
+      <label class="field"><span>Roll number</span>
+        <input id="login-user" type="text" autocomplete="username" placeholder="e.g. CS06020" /></label>
+      <label class="field"><span>Password</span>
+        <input id="login-pass" type="password" autocomplete="current-password" /></label>
+      <button id="login-btn" class="primary">Sign in</button>
+      <p class="note">No account? <button class="linkish" id="to-signup">Create one</button></p>
+    </div>
+
+    <div id="signup-form" hidden>
+      <p class="note hint-box">
+        Your roll number and name must match the college record — you cannot
+        register as someone who does not exist.
+        <br />Trying the demo? Use <code>CS04001</code> with the name
+        <code>Karan Verma</code>, or any other seeded student.
+      </p>
+      <label class="field"><span>Roll number</span>
+        <input id="su-roll" type="text" placeholder="e.g. CS04001" /></label>
+      <label class="field"><span>Full name</span>
+        <input id="su-name" type="text" placeholder="as it appears on college records" /></label>
+      <label class="field"><span>Password</span>
+        <input id="su-pass" type="password" autocomplete="new-password" placeholder="at least 8 characters" /></label>
+      <button id="signup-btn" class="primary">Create account</button>
+      <p class="note">Already registered? <button class="linkish" id="to-login">Sign in</button></p>
+    </div>
+
+    <p class="gate-error" id="gate-error"></p>
+    <p class="note demo-note">Demo logins &mdash; student <code>CS06020 / demo1234</code> &middot; staff <code>staff / staff1234</code>. Staff see class-wide figures; students see only their own records.</p>
+  </div>
+</section>
+
+<main hidden>
+  <div id="pipeline" aria-hidden="true">
+    <span class="stage" data-stage="heard"><i></i>heard<b></b></span>
+    <span class="stage" data-stage="routed"><i></i>routed<b></b></span>
+    <span class="stage" data-stage="queried"><i></i>queried<b></b></span>
+    <span class="stage" data-stage="composed"><i></i>composed<b></b></span>
+    <span class="stage" data-stage="spoke"><i></i>spoke<b></b></span>
+  </div>
+
+  <div id="transcript">
+    <div class="empty-state">
+      <p class="lead">Ask about your marks, attendance, timetable or the college rules.</p>
+      <div class="suggestions">
+        <button class="chip" data-ask="What is my attendance?">My attendance</button>
+        <button class="chip" data-ask="What is my next class?">My next class</button>
+        <button class="chip" data-ask="What is my CGPA?">My CGPA</button>
+        <button class="chip" data-ask="What is the minimum attendance requirement?">Attendance policy</button>
+        <button class="chip" data-ask="Remind me to submit the AI assignment on Friday">Set a reminder</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <div class="composer">
+      <canvas id="orb" width="220" height="220" aria-label="Hold to talk" role="button" tabindex="0"></canvas>
+      <div class="input-line">
+        <input id="question" type="text" placeholder="Ask a question, or hold the orb to speak" autocomplete="off" />
+        <button id="send" aria-label="Send">Send</button>
+      </div>
+    </div>
+    <div class="toolbar">
+      <button id="talk">Hold to talk<small>or hold the Space bar</small></button>
+      <button id="stop" class="icon" title="Stop speaking" disabled aria-label="Stop speaking">&#9632;</button>
+      <button id="replay" class="icon" title="Replay the last answer" disabled aria-label="Replay">&#8635;</button>
+      <button id="settings-toggle" class="icon" title="Voice settings" aria-label="Voice settings">&#9881;</button>
+      <button id="clear" class="icon" title="Clear conversation" aria-label="Clear conversation">&#10005;</button>
+    </div>
+    <p class="note" id="hint">Hold Space to talk. Memory keeps the last 6 turns.</p>
+
+    <div id="settings" hidden>
+      <div class="row">
+        <label for="voice-select" class="note">Voice</label>
+        <select id="voice-select"></select>
+      </div>
+      <div class="row">
+        <label for="rate" class="note">Speed <span id="rate-value">175</span></label>
+        <input id="rate" type="range" min="80" max="320" step="5" value="175" />
+      </div>
+      <div class="row">
+        <label for="language" class="note">Language</label>
+        <select id="language">
+          <option value="">auto-detect</option>
+          <option value="en">English</option>
+          <option value="hi">Hindi</option>
+        </select>
+      </div>
+      <div class="row">
+        <label class="note"><input type="checkbox" id="autoplay" checked /> Speak answers automatically</label>
+      </div>
+    </div>
+  </div>
+
+  <aside id="panel">
+    <div class="panel-head"><h2>How I answered</h2></div>
+    <div id="details">
+      <div class="empty-state">
+        <p class="lead">Every answer shows its working here — which skill fired
+          and why, the SQL it generated, the passages it retrieved, and how long
+          each stage took.</p>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<audio id="player"></audio>
+
+<script>
+(function () {
+  "use strict";
+
+  // --- auth ---------------------------------------------------------------
+  // The token lives in sessionStorage, not localStorage: it is scoped to this
+  // tab and cleared when the tab closes, which limits the damage if a script
+  // ever did get injected. The page also ships a strict CSP and loads no
+  // third-party code at all.
+  var TOKEN_KEY = "va_token";
+  var token = sessionStorage.getItem(TOKEN_KEY) || "";
+  var currentUser = null;
+
+  function authHeaders(extra) {
+    var h = extra || {};
+    if (token) h["Authorization"] = "Bearer " + token;
+    return h;
+  }
+
+  // Every call goes through here so a 401 always lands the user back on the
+  // sign-in screen instead of failing silently mid-conversation.
+  function api(url, options) {
+    options = options || {};
+    options.headers = authHeaders(options.headers);
+    return fetch(url, options).then(function (r) {
+      if (r.status === 401) {
+        setToken("");
+        showGate("Your session expired. Please sign in again.");
+        throw new Error("unauthorized");
+      }
+      return r;
+    });
+  }
+
+  function setToken(value) {
+    token = value || "";
+    if (token) sessionStorage.setItem(TOKEN_KEY, token);
+    else sessionStorage.removeItem(TOKEN_KEY);
+  }
+
+  var transcriptEl = document.getElementById("transcript");
+  var detailsEl = document.getElementById("details");
+  var questionEl = document.getElementById("question");
+  var sendBtn = document.getElementById("send");
+  var talkBtn = document.getElementById("talk");
+  var clearBtn = document.getElementById("clear");
+  var player = document.getElementById("player");
+  var statusEl = document.getElementById("status");
+  var statusText = document.getElementById("status-text");
+
+  var stopBtn = document.getElementById("stop");
+  var replayBtn = document.getElementById("replay");
+  var settingsBox = document.getElementById("settings");
+  var settingsToggle = document.getElementById("settings-toggle");
+  var voiceSelect = document.getElementById("voice-select");
+  var rateInput = document.getElementById("rate");
+  var rateValue = document.getElementById("rate-value");
+  var autoplayBox = document.getElementById("autoplay");
+  var languageSelect = document.getElementById("language");
+
+  var gateEl = document.getElementById("gate");
+  var mainEl = document.querySelector("main");
+  var gateTitle = document.getElementById("gate-title");
+  var gateSub = document.getElementById("gate-sub");
+  var gateError = document.getElementById("gate-error");
+  var loginForm = document.getElementById("login-form");
+  var signupForm = document.getElementById("signup-form");
+  var loginUser = document.getElementById("login-user");
+  var loginPass = document.getElementById("login-pass");
+  var loginBtn = document.getElementById("login-btn");
+  var suRoll = document.getElementById("su-roll");
+  var suName = document.getElementById("su-name");
+  var suPass = document.getElementById("su-pass");
+  var signupBtn = document.getElementById("signup-btn");
+  var toSignup = document.getElementById("to-signup");
+  var toLogin = document.getElementById("to-login");
+  var whoamiEl = document.getElementById("whoami");
+  var whoamiName = document.getElementById("whoami-name");
+  var whoamiRole = document.getElementById("whoami-role");
+  var logoutBtn = document.getElementById("logout");
+  var themeBtn = document.getElementById("theme");
+
+  // --- theme --------------------------------------------------------------
+  function applyTheme(name) {
+    document.documentElement.setAttribute("data-theme", name);
+    themeBtn.textContent = name === "light" ? "◑" : "◐";
+    themeBtn.title = name === "light" ? "Switch to dark" : "Switch to light";
+    // The orb paints to a canvas, so it cannot inherit CSS colours.
+    orbPalette = name === "light" ? ORB_LIGHT : ORB_DARK;
+  }
+
+  var savedTheme = null;
+  try { savedTheme = localStorage.getItem("va_theme"); } catch (e) { /* ignore */ }
+  var osPrefersLight = window.matchMedia
+    && window.matchMedia("(prefers-color-scheme: light)").matches;
+  applyTheme(savedTheme || (osPrefersLight ? "light" : "dark"));
+
+  themeBtn.addEventListener("click", function () {
+    var next = document.documentElement.getAttribute("data-theme") === "light"
+      ? "dark" : "light";
+    applyTheme(next);
+    try { localStorage.setItem("va_theme", next); } catch (e) { /* ignore */ }
+  });
+
+  var TALK_LABEL = "Hold to talk<small>or hold the Space bar</small>";
+
+  // --- the orb ------------------------------------------------------------
+  // Three rotating rings whose radius follows whatever is making sound: your
+  // microphone while recording, the assistant's own audio while it answers.
+  // `orbLevel` is fed from both places; the draw loop only reads it.
+  var orbCanvas = document.getElementById("orb");
+  var orbCtx = orbCanvas.getContext("2d");
+  var orbLevel = 0, orbShown = 0, orbMode = "idle", orbPhase = 0;
+
+  function setOrb(mode) { orbMode = mode; }
+  function feedOrb(level) { orbLevel = Math.min(1, Math.max(0, level)); }
+
+  var ORB_DARK = {
+    idle:     ["109,139,255", "76,201,240"],
+    listening:["61,220,151", "76,201,240"],
+    thinking: ["247,185,85", "109,139,255"],
+    speaking: ["76,201,240", "109,139,255"]
+  };
+  var ORB_LIGHT = {
+    idle:     ["79,106,224", "13,143,184"],
+    listening:["15,157,105", "13,143,184"],
+    thinking: ["180,112,12", "79,106,224"],
+    speaking: ["13,143,184", "79,106,224"]
+  };
+  var orbPalette = ORB_DARK;
+
+  function drawOrb() {
+    var dpr = window.devicePixelRatio || 1;
+    var size = 220;
+    if (orbCanvas.width !== size * dpr) {
+      orbCanvas.width = orbCanvas.height = size * dpr;
+    }
+    var g = orbCtx, c = size / 2;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, size, size);
+
+    // Ease towards the target so the orb glides instead of jittering.
+    orbShown += (orbLevel - orbShown) * 0.18;
+    orbPhase += orbMode === "thinking" ? 0.055 : 0.022;
+
+    var pair = orbPalette[orbMode] || orbPalette.idle;
+    var breathe = orbMode === "idle" ? 0.5 + Math.sin(orbPhase * 1.4) * 0.5 : 1;
+    var base = 30 + orbShown * 26 + (orbMode === "idle" ? breathe * 3 : 0);
+
+    var halo = g.createRadialGradient(c, c, base * 0.5, c, c, base * 2.5);
+    halo.addColorStop(0, "rgba(" + pair[0] + ",.30)");
+    halo.addColorStop(1, "rgba(" + pair[0] + ",0)");
+    g.fillStyle = halo;
+    g.beginPath(); g.arc(c, c, base * 2.5, 0, Math.PI * 2); g.fill();
+
+    for (var i = 0; i < 3; i++) {
+      var t = orbPhase + i * 2.1;
+      var wobble = 1 + orbShown * 0.35;
+      g.beginPath();
+      for (var a = 0; a <= Math.PI * 2 + 0.01; a += 0.06) {
+        // Two out-of-phase sines make the ring bulge organically rather than
+        // pulsing as a perfect circle.
+        var r = base * wobble
+              + Math.sin(a * 3 + t) * (3 + orbShown * 11)
+              + Math.sin(a * 5 - t * 1.3) * (2 + orbShown * 6);
+        var x = c + Math.cos(a) * r, y = c + Math.sin(a) * r;
+        if (a === 0) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+      g.closePath();
+      g.strokeStyle = "rgba(" + pair[i % 2] + "," + (0.5 - i * 0.13) + ")";
+      g.lineWidth = 2 - i * 0.5;
+      g.stroke();
+    }
+
+    var core = g.createRadialGradient(c, c, 0, c, c, base);
+    core.addColorStop(0, "rgba(" + pair[0] + ",.5)");
+    core.addColorStop(1, "rgba(" + pair[1] + ",.05)");
+    g.fillStyle = core;
+    g.beginPath(); g.arc(c, c, base, 0, Math.PI * 2); g.fill();
+
+    if (orbMode !== "listening" && orbMode !== "speaking") feedOrb(orbLevel * 0.9);
+    requestAnimationFrame(drawOrb);
+  }
+  requestAnimationFrame(drawOrb);
+
+  // --- pipeline strip -----------------------------------------------------
+  var STAGE_ORDER = ["heard", "routed", "queried", "composed", "spoke"];
+  var pipelineEl = document.getElementById("pipeline");
+
+  function resetPipeline(activeFirst) {
+    pipelineEl.classList.add("live");
+    STAGE_ORDER.forEach(function (name) {
+      var node = document.querySelector('.stage[data-stage="' + name + '"]');
+      if (!node) return;
+      node.className = "stage";
+      node.querySelector("b").textContent = "";
+    });
+    if (activeFirst) markStageActive(activeFirst);
+  }
+
+  function markStageActive(name) {
+    var node = document.querySelector('.stage[data-stage="' + name + '"]');
+    if (node) node.classList.add("active");
+  }
+
+  function hidePipeline() {
+    // Leave the finished timings up briefly, then fold the strip away so the
+    // conversation is not permanently topped by five chips.
+    setTimeout(function () {
+      if (!busy) pipelineEl.classList.remove("live");
+    }, 2600);
+  }
+
+  function markStageDone(name, ms) {
+    var node = document.querySelector('.stage[data-stage="' + name + '"]');
+    if (!node) return;
+    node.classList.remove("active");
+    node.classList.add("done");
+    if (typeof ms === "number") {
+      node.querySelector("b").textContent = (ms / 1000).toFixed(1) + "s";
+    }
+    var next = STAGE_ORDER[STAGE_ORDER.indexOf(name) + 1];
+    if (next) markStageActive(next);
+  }
+  var busy = false;
+  var answers = [];   // detail payload per assistant message
+  var lastAudio = null;
+
+  // --- voice settings (persisted) ----------------------------------------
+  var prefs = {};
+  try { prefs = JSON.parse(localStorage.getItem("va_prefs") || "{}"); } catch (e) { prefs = {}; }
+  if (prefs.rate) { rateInput.value = prefs.rate; rateValue.textContent = prefs.rate; }
+  if (prefs.autoplay === false) autoplayBox.checked = false;
+
+  function savePrefs() {
+    prefs.voice = voiceSelect.value;
+    prefs.rate = rateInput.value;
+    prefs.autoplay = autoplayBox.checked;
+    prefs.language = languageSelect.value;
+    try { localStorage.setItem("va_prefs", JSON.stringify(prefs)); } catch (e) { /* ignore */ }
+  }
+
+  settingsToggle.addEventListener("click", function () {
+    settingsBox.hidden = !settingsBox.hidden;
+  });
+  rateInput.addEventListener("input", function () {
+    rateValue.textContent = rateInput.value;
+    savePrefs();
+  });
+  voiceSelect.addEventListener("change", savePrefs);
+  autoplayBox.addEventListener("change", savePrefs);
+
+  if (prefs.language) languageSelect.value = prefs.language;
+  languageSelect.addEventListener("change", savePrefs);
+
+  // --- sign in / sign up --------------------------------------------------
+  function showGate(message) {
+    gateEl.hidden = false;
+    mainEl.hidden = true;
+    whoamiEl.hidden = true;
+    gateError.textContent = message || "";
+    currentUser = null;
+  }
+
+  function showApp(user) {
+    currentUser = user;
+    gateEl.hidden = true;
+    mainEl.hidden = false;
+    whoamiEl.hidden = false;
+    gateError.textContent = "";
+    whoamiName.textContent = user.name || user.username;
+    whoamiRole.textContent = user.role;
+    whoamiRole.className = "role-chip" + (user.role === "staff" ? " staff" : "");
+    syncConversationState();
+    loadVoices();
+    loadHealth();
+  }
+
+  function submitAuth(url, body, button) {
+    gateError.textContent = "";
+    button.disabled = true;
+    fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (!res.ok) { gateError.textContent = res.d.error || "Sign in failed."; return; }
+        setToken(res.d.token);
+        showApp(res.d.user);
+      })
+      .catch(function () { gateError.textContent = "Could not reach the server."; })
+      .finally(function () { button.disabled = false; });
+  }
+
+  loginBtn.addEventListener("click", function () {
+    submitAuth("/auth/login",
+      { username: loginUser.value.trim(), password: loginPass.value }, loginBtn);
+  });
+  signupBtn.addEventListener("click", function () {
+    submitAuth("/auth/signup", {
+      roll_no: suRoll.value.trim(), name: suName.value.trim(), password: suPass.value
+    }, signupBtn);
+  });
+  [loginUser, loginPass].forEach(function (el_) {
+    el_.addEventListener("keydown", function (e) { if (e.key === "Enter") loginBtn.click(); });
+  });
+  [suRoll, suName, suPass].forEach(function (el_) {
+    el_.addEventListener("keydown", function (e) { if (e.key === "Enter") signupBtn.click(); });
+  });
+
+  toSignup.addEventListener("click", function () {
+    loginForm.hidden = true; signupForm.hidden = false;
+    gateTitle.textContent = "Create your account";
+    gateSub.textContent = "Use the roll number and name on your college record.";
+    gateError.textContent = "";
+  });
+  toLogin.addEventListener("click", function () {
+    signupForm.hidden = true; loginForm.hidden = false;
+    gateTitle.textContent = "Sign in";
+    gateSub.textContent = "Your marks and attendance are private to your account.";
+    gateError.textContent = "";
+  });
+
+  logoutBtn.addEventListener("click", function () {
+    api("/auth/logout", { method: "POST" })
+      .catch(function () { /* logging out locally is enough */ })
+      .finally(function () {
+        setToken("");
+        answers = [];
+        transcriptEl.innerHTML = "";
+        detailsEl.innerHTML = "";
+        showGate("");
+      });
+  });
+
+  // Resume a session if the tab still holds a valid token.
+  if (token) {
+    fetch("/auth/me", { headers: authHeaders() })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d && d.user) showApp(d.user); else { setToken(""); showGate(""); } })
+      .catch(function () { showGate(""); });
+  } else {
+    showGate("");
+  }
+
+  function loadVoices() {
+    if (voiceSelect.options.length > 1) return;   // already loaded
+    api("/voices").then(function (r) { return r.json(); }).then(function (d) {
+    var list = d.voices || [];
+    if (!list.length) {
+      voiceSelect.appendChild(new Option("system default", ""));
+      voiceSelect.disabled = true;
+      return;
+    }
+    voiceSelect.appendChild(new Option("system default", ""));
+    list.forEach(function (v) { voiceSelect.appendChild(new Option(v.name, v.id)); });
+    if (prefs.voice) voiceSelect.value = prefs.voice;
+    }).catch(function () {
+      voiceSelect.appendChild(new Option("system default", ""));
+      voiceSelect.disabled = true;
+    });
+  }
+
+  // --- helpers ------------------------------------------------------------
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined && text !== null) node.textContent = text;
+    return node;
+  }
+
+  // Before the first message the orb sits large and centred; afterwards it
+  // shrinks into the composer. One class drives the whole transition.
+  function syncConversationState() {
+    var started = transcriptEl.querySelector(".msg") !== null;
+    document.body.classList.toggle("no-convo", !started);
+  }
+
+  function clearEmpty(container) {
+    var empty = container.querySelector(".empty");
+    if (empty) empty.remove();
+    var rich = container.querySelector(".empty-state");
+    if (rich) rich.remove();
+  }
+
+  function scrollDown() {
+    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+  }
+
+  function addMessage(who, text, opts) {
+    opts = opts || {};
+    clearEmpty(transcriptEl);
+    var wrap = el("div", "msg " + (who === "You" ? "user" : "assistant") + (opts.error ? " error" : ""));
+    wrap.appendChild(el("div", "who", who));
+    var bubble = el("div", "bubble", text);
+    wrap.appendChild(bubble);
+
+    // A misheard question is the commonest reason a voice turn goes wrong, so
+    // let the user correct the transcript and resend it as text.
+    if (opts.language && opts.language !== "en") {
+      wrap.appendChild(el("span", "lang", opts.language));
+    }
+
+    if (opts.editable) {
+      var edit = el("span", "edit", "✎ misheard? edit & resend");
+      edit.addEventListener("click", function () {
+        questionEl.value = bubble.textContent;
+        questionEl.focus();
+        questionEl.select();
+      });
+      wrap.appendChild(edit);
+    }
+
+    if (opts.detailIndex !== undefined) {
+      var tool = opts.tool || "none";
+      var tag = el("span", "tag " + (TOOL_CLASS[tool] || ""),
+        toolLabel(tool) + " · show working");
+      tag.addEventListener("click", function () { renderDetails(opts.detailIndex); });
+      wrap.appendChild(tag);
+    }
+    transcriptEl.appendChild(wrap);
+    syncConversationState();
+    scrollDown();
+    return wrap;
+  }
+
+  var TOOL_LABELS = {
+    query_database: "database",
+    search_documents: "documents",
+    timetable: "timetable",
+    reminders: "reminders",
+    smalltalk: "chat"
+  };
+  var TOOL_CLASS = {
+    query_database: "", search_documents: "rag", timetable: "tt",
+    reminders: "rem", smalltalk: "chat"
+  };
+
+  function toolLabel(tool) {
+    return TOOL_LABELS[tool] || "no tool";
+  }
+
+  // --- SQL highlighting ---------------------------------------------------
+  // Deliberately tiny: escape first, then wrap a few token classes. No parser
+  // and no library, which keeps the page dependency-free and CSP-clean.
+  var SQL_KEYWORDS = /\b(SELECT|FROM|WHERE|JOIN|INNER|LEFT|OUTER|ON|GROUP|BY|ORDER|HAVING|LIMIT|AS|AND|OR|NOT|IN|IS|NULL|DISTINCT|CASE|WHEN|THEN|ELSE|END|ASC|DESC|UNION|ALL)\b/gi;
+  var SQL_FUNCS = /\b(COUNT|AVG|SUM|MAX|MIN|ROUND|LOWER|UPPER|COALESCE|NULLIF|CAST)\b(?=\s*\()/gi;
+
+  function escapeHtml(text) {
+    return String(text).replace(/[&<>"']/g, function (ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
+    });
+  }
+
+  function highlightSql(sql) {
+    var out = escapeHtml(sql);
+
+    // Pull quoted literals out first and restore them at the end, so a keyword
+    // or digit inside 'Artificial Intelligence' does not get recoloured.
+    var literals = [];
+    out = out.replace(/&#39;[^&]*?&#39;/g, function (match) {
+      literals.push(match);
+      return "@@STR" + (literals.length - 1) + "@@";
+    });
+
+    out = out.replace(SQL_FUNCS, '<span class="fn">$1</span>');
+    out = out.replace(SQL_KEYWORDS, '<span class="kw">$1</span>');
+    out = out.replace(/(\d+(?:\.\d+)?)/g, '<span class="num">$1</span>');
+
+    return out.replace(/@@STR(\d+)@@/g, function (_m, index) {
+      return '<span class="str">' + literals[index] + '</span>';
+    });
+  }
+
+  function sqlBlock(sql) {
+    var pre = el("pre");
+    pre.innerHTML = highlightSql(sql);
+    return pre;
+  }
+
+  function setBusy(state) {
+    busy = state;
+    sendBtn.disabled = state;
+    questionEl.disabled = state;
+    sendBtn.textContent = state ? "Thinking…" : "Send";
+  }
+
+  // --- detail panel -------------------------------------------------------
+  function renderDetails(index) {
+    var d = answers[index];
+    detailsEl.innerHTML = "";
+    if (!d) {
+      detailsEl.appendChild(el("p", "empty", "Nothing to show yet."));
+      return;
+    }
+
+    // tool + reason
+    var b1 = el("div", "detail-block");
+    b1.appendChild(el("h3", null, "Tool chosen"));
+    var pill = el("span", "pill " + (TOOL_CLASS[d.tool] || "chat"),
+      toolLabel(d.tool) + "  ·  " + (d.tool || "none"));
+    b1.appendChild(pill);
+    if (d.reason) b1.appendChild(el("p", "note", d.reason));
+    detailsEl.appendChild(b1);
+
+    if (d.transcript) {
+      var bT = el("div", "detail-block");
+      bT.appendChild(el("h3", null, "Transcript (speech to text)"));
+      bT.appendChild(el("pre", null, d.transcript));
+      detailsEl.appendChild(bT);
+    }
+
+    if (d.timings && Object.keys(d.timings).length) {
+      var bTime = el("div", "detail-block");
+      var TIMING_META = [
+        ["stt_ms", "speech to text", "#4cc9f0"],
+        ["router_ms", "router", "#6d8bff"],
+        ["tool_ms", "tool", "#d68aff"],
+        ["compose_ms", "compose", "#f7b955"],
+        ["tts_ms", "speech", "#3ddc97"]
+      ];
+      var present = TIMING_META.filter(function (m) {
+        return typeof d.timings[m[0]] === "number";
+      });
+      var total = present.reduce(function (n, m) { return n + d.timings[m[0]]; }, 0);
+
+      bTime.appendChild(el("h3", null,
+        "Time spent  ·  " + (total / 1000).toFixed(2) + "s total"));
+
+      var wrapT = el("div", "timings");
+      var bar = el("div", "timing-bar");
+      present.forEach(function (m) {
+        var seg = el("span");
+        seg.style.width = (total ? (d.timings[m[0]] / total) * 100 : 0) + "%";
+        seg.style.background = m[2];
+        seg.title = m[1] + " " + (d.timings[m[0]] / 1000).toFixed(2) + "s";
+        bar.appendChild(seg);
+      });
+      wrapT.appendChild(bar);
+
+      var key = el("div", "timing-key");
+      present.forEach(function (m) {
+        var item = el("span");
+        var swatch = el("i");
+        swatch.style.background = m[2];
+        item.appendChild(swatch);
+        item.appendChild(document.createTextNode(m[1] + " "));
+        item.appendChild(el("b", null, (d.timings[m[0]] / 1000).toFixed(2) + "s"));
+        key.appendChild(item);
+      });
+      wrapT.appendChild(key);
+      bTime.appendChild(wrapT);
+      detailsEl.appendChild(bTime);
+    }
+
+    if (d.sql) {
+      var b2 = el("div", "detail-block");
+      b2.appendChild(el("h3", null, "Generated SQL"));
+      b2.appendChild(sqlBlock(d.sql));
+      if (d.attempts && d.attempts.length) {
+        d.attempts.forEach(function (a, i) {
+          var good = a.status.indexOf("valid") === 0;
+          var row = el("div", "attempt " + (good ? "good" : "bad"));
+          row.appendChild(el("span", "n", "try " + (i + 1)));
+          row.appendChild(el("span", null, a.status));
+          b2.appendChild(row);
+        });
+      }
+      detailsEl.appendChild(b2);
+    }
+
+    if (d.columns && d.columns.length) {
+      var b3 = el("div", "detail-block");
+      b3.appendChild(el("h3", null, "Rows returned (" + (d.row_count || 0) + ")"));
+      var wrap = el("div", "scroll-x");
+      var table = el("table", "rows");
+      var thead = el("thead");
+      var trh = el("tr");
+      d.columns.forEach(function (c) { trh.appendChild(el("th", null, c)); });
+      thead.appendChild(trh);
+      table.appendChild(thead);
+      var tbody = el("tbody");
+      (d.rows || []).slice(0, 25).forEach(function (row) {
+        var tr = el("tr");
+        row.forEach(function (v) { tr.appendChild(el("td", null, v === null ? "NULL" : String(v))); });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      b3.appendChild(wrap);
+      if ((d.rows || []).length > 25) {
+        b3.appendChild(el("p", "note", "showing first 25 of " + d.rows.length + " rows"));
+      }
+      detailsEl.appendChild(b3);
+    }
+
+    if (d.classes && d.classes.length) {
+      var bC = el("div", "detail-block");
+      bC.appendChild(el("h3", null, "Classes (" + d.classes.length + ")"));
+      d.classes.forEach(function (c) {
+        var box = el("div", "chunk");
+        box.appendChild(el("div", "meta", c.day + "  ·  " + c.start_time + "–" + c.end_time + "  ·  room " + c.room));
+        box.appendChild(el("div", null, c.subject));
+        bC.appendChild(box);
+      });
+      detailsEl.appendChild(bC);
+    }
+
+    if (d.reminders && d.reminders.length) {
+      var bR = el("div", "detail-block");
+      bR.appendChild(el("h3", null, "Pending reminders (" + d.reminders.length + ")"));
+      d.reminders.forEach(function (r) {
+        var box = el("div", "chunk");
+        if (r.due_date) box.appendChild(el("div", "meta", "due " + r.due_date));
+        box.appendChild(el("div", null, r.text));
+        bR.appendChild(box);
+      });
+      detailsEl.appendChild(bR);
+    }
+
+    if (d.chunks && d.chunks.length) {
+      var b4 = el("div", "detail-block");
+      b4.appendChild(el("h3", null, "Retrieved passages (" + d.chunks.length + ")"));
+      d.chunks.forEach(function (c, i) {
+        var box = el("div", "chunk");
+        var meta = el("div", "meta");
+        meta.appendChild(el("span", "src", c.source));
+        var relBar = el("span", "relevance");
+        var fill = el("i");
+        fill.style.width = Math.round(Math.min(1, c.score) * 100) + "%";
+        relBar.appendChild(fill);
+        meta.appendChild(relBar);
+        meta.appendChild(el("span", null, c.score));
+        box.appendChild(meta);
+        box.appendChild(el("div", null, c.text));
+        b4.appendChild(box);
+      });
+      detailsEl.appendChild(b4);
+    }
+
+    if (d.error) {
+      var b5 = el("div", "detail-block");
+      b5.appendChild(el("h3", null, "Error"));
+      b5.appendChild(el("p", "err-text", d.error));
+      detailsEl.appendChild(b5);
+    }
+  }
+
+  // --- responses ----------------------------------------------------------
+  function handleResponse(data, transcriptAlreadyShown) {
+    if (data.transcript && !transcriptAlreadyShown) {
+      addMessage("You", data.transcript);
+    }
+    answers.push(data);
+    var index = answers.length - 1;
+    addMessage("Assistant", data.answer || "(no answer)", {
+      detailIndex: index,
+      tool: data.tool,
+      error: !!data.error && !data.answer
+    });
+    renderDetails(index);
+
+    playAudio(data);
+  }
+
+  function playAudio(data) {
+    if (!data || !data.audio_base64) return;
+    lastAudio = "data:" + (data.audio_mime || "audio/wav") + ";base64," + data.audio_base64;
+    replayBtn.disabled = false;
+    if (!autoplayBox.checked) return;
+    startPlayback();
+  }
+
+  // Route playback through Web Audio so the orb can pulse with the assistant's
+  // own voice, not just with the microphone.
+  var playCtx = null, playAnalyser = null, playTimer = null;
+
+  function attachPlaybackAnalyser() {
+    if (playAnalyser) return;
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      playCtx = new Ctx();
+      var source = playCtx.createMediaElementSource(player);
+      playAnalyser = playCtx.createAnalyser();
+      playAnalyser.fftSize = 512;
+      source.connect(playAnalyser);
+      playAnalyser.connect(playCtx.destination);
+    } catch (e) { /* orb falls back to idle; audio still plays */ }
+  }
+
+  function startPlayback() {
+    if (!lastAudio) return;
+    try {
+      attachPlaybackAnalyser();
+      if (playCtx && playCtx.state === "suspended") playCtx.resume();
+      player.src = lastAudio;
+      player.play().then(function () {
+        stopBtn.disabled = false;
+        setOrb("speaking");
+        if (playAnalyser && !playTimer) {
+          var buf = new Uint8Array(playAnalyser.frequencyBinCount);
+          playTimer = setInterval(function () {
+            playAnalyser.getByteTimeDomainData(buf);
+            var peak = 0;
+            for (var i = 0; i < buf.length; i++) {
+              var v = Math.abs(buf[i] - 128) / 128;
+              if (v > peak) peak = v;
+            }
+            feedOrb(peak * 1.8);
+          }, 50);
+        }
+      }).catch(function () { /* autoplay blocked; text is still shown */ });
+    } catch (e) { /* ignore */ }
+  }
+
+  function endPlaybackOrb() {
+    if (playTimer) { clearInterval(playTimer); playTimer = null; }
+    feedOrb(0);
+    setOrb("idle");
+  }
+
+  function stopSpeaking() {
+    try { player.pause(); player.currentTime = 0; } catch (e) { /* ignore */ }
+    stopBtn.disabled = true;
+    endPlaybackOrb();
+  }
+
+  player.addEventListener("ended", function () {
+    stopBtn.disabled = true;
+    endPlaybackOrb();
+  });
+  stopBtn.addEventListener("click", stopSpeaking);
+  replayBtn.addEventListener("click", startPlayback);
+
+  function failure(message) {
+    addMessage("Assistant", message, { error: true });
+  }
+
+  // --- typed questions ----------------------------------------------------
+  function sendText() {
+    if (busy) return;
+    var text = questionEl.value.trim();
+    if (!text) return;
+    questionEl.value = "";
+    addMessage("You", text);
+    setBusy(true);
+    resetPipeline("routed");
+    setOrb("thinking");
+
+    api("/ask-text", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question: text,
+        speak: true,
+        voice: voiceSelect.value || null,
+        rate: parseInt(rateInput.value, 10) || null
+      })
+    })
+      .then(function (r) {
+        if (!r.ok) throw new Error("server returned " + r.status);
+        return consumeStream(r);
+      })
+      .catch(function (e) {
+        if (e.message !== "unauthorized") failure("Could not reach the server: " + e.message);
+      })
+      .finally(function () {
+        setBusy(false);
+        hidePipeline();
+        setOrb("idle");
+      });
+  }
+
+  // Suggestion chips: one click asks the question.
+  transcriptEl.addEventListener("click", function (e) {
+    var chip = e.target.closest ? e.target.closest(".chip") : null;
+    if (!chip || !chip.dataset.ask) return;
+    questionEl.value = chip.dataset.ask;
+    sendText();
+  });
+
+  sendBtn.addEventListener("click", sendText);
+  questionEl.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") sendText();
+  });
+
+  // --- push to talk -------------------------------------------------------
+  var recorder = null, stream = null, parts = [], mime = "audio/webm";
+  var audioCtx = null, analyser = null, meterTimer = null;
+
+  // Live input level, so it is obvious the mic is actually picking you up.
+  function startMeter(srcStream) {
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      audioCtx = new Ctx();
+      var source = audioCtx.createMediaStreamSource(srcStream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+      var buf = new Uint8Array(analyser.frequencyBinCount);
+      meterTimer = setInterval(function () {
+        analyser.getByteTimeDomainData(buf);
+        var peak = 0;
+        for (var i = 0; i < buf.length; i++) {
+          var v = Math.abs(buf[i] - 128) / 128;
+          if (v > peak) peak = v;
+        }
+        feedOrb(peak * 1.6);
+      }, 60);
+    } catch (e) { /* orb is decorative; ignore failures */ }
+  }
+
+  function stopMeter() {
+    if (meterTimer) { clearInterval(meterTimer); meterTimer = null; }
+    feedOrb(0);
+    if (audioCtx) {
+      try { audioCtx.close(); } catch (e) { /* ignore */ }
+      audioCtx = null;
+    }
+    analyser = null;
+  }
+
+  function pickMime() {
+    var options = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
+    for (var i = 0; i < options.length; i++) {
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported(options[i])) return options[i];
+    }
+    return "";
+  }
+
+  function extensionFor(type) {
+    if (type.indexOf("ogg") !== -1) return ".ogg";
+    if (type.indexOf("mp4") !== -1) return ".mp4";
+    return ".webm";
+  }
+
+  function startRecording() {
+    if (busy || recorder) return;
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      failure("This browser does not support microphone recording. Use the text box instead.");
+      return;
+    }
+    stopSpeaking();  // barge-in: never talk over the user
+    setOrb("listening");
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (s) {
+      stream = s;
+      startMeter(s);
+      parts = [];
+      mime = pickMime();
+      recorder = mime ? new MediaRecorder(s, { mimeType: mime }) : new MediaRecorder(s);
+      mime = recorder.mimeType || mime || "audio/webm";
+      recorder.addEventListener("dataavailable", function (e) {
+        if (e.data && e.data.size > 0) parts.push(e.data);
+      });
+      recorder.addEventListener("stop", uploadRecording);
+      recorder.start();
+      setOrb("listening");
+      talkBtn.classList.add("recording");
+      talkBtn.innerHTML = "Recording<small>release to send</small>";
+    }).catch(function (e) {
+      failure("Microphone access was denied (" + e.name + "). Use the text box instead.");
+    });
+  }
+
+  function stopRecording() {
+    setOrb("thinking");
+    talkBtn.classList.remove("recording");
+    talkBtn.innerHTML = TALK_LABEL;
+    stopMeter();
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+  }
+
+  function releaseStream() {
+    // In hands-free mode the stream is long-lived and shared by every clip,
+    // so only the push-to-talk stream is torn down here.
+    if (stream) {
+      stream.getTracks().forEach(function (t) { t.stop(); });
+      stream = null;
+    }
+    recorder = null;
+  }
+
+  function uploadRecording() {
+    var blob = new Blob(parts, { type: mime });
+    releaseStream();
+    if (!blob.size) {
+      failure("The recording was empty. Hold the button a little longer.");
+      return;
+    }
+    sendClip(blob, mime);
+  }
+
+  // One consumer for both endpoints: they emit the same NDJSON events.
+  // `stage` lights the pipeline, `delta` types the answer out, `final`
+  // replaces it with the canonical text, `audio` plays it.
+  function consumeStream(response, opts) {
+    opts = opts || {};
+    var shownTranscript = false;
+    var live = null;         // the assistant bubble being typed into
+    var buffer = "";
+
+    function onEvent(evt) {
+      if (evt.event === "stage") {
+        markStageDone(evt.stage, evt.ms);
+        if (evt.stage === "routed") setOrb("thinking");
+      } else if (evt.event === "transcript") {
+        if (evt.transcript) {
+          addMessage("You", evt.transcript, { editable: true, language: evt.language });
+          shownTranscript = true;
+          talkBtn.innerHTML = "Thinking<small>working on it</small>";
+        }
+      } else if (evt.event === "delta") {
+        if (!live) live = beginStreamingMessage();
+        live.bubble.textContent += evt.text;
+        scrollDown();
+      } else if (evt.event === "final") {
+        if (live) { endStreamingMessage(live); live = null; }
+        handleResponse(evt, shownTranscript, !!live);
+      } else if (evt.event === "audio") {
+        if (typeof evt.tts_ms === "number" && answers.length) {
+          var last = answers[answers.length - 1];
+          last.timings = last.timings || {};
+          last.timings.tts_ms = evt.tts_ms;
+          renderDetails(answers.length - 1);
+        }
+        playAudio(evt);
+      }
+    }
+
+    if (!response.body || !response.body.getReader) {
+      return response.json().then(function (d) { onEvent(d); });
+    }
+    var reader = response.body.getReader();
+    var decoder = new TextDecoder();
+
+    function pump() {
+      return reader.read().then(function (chunk) {
+        buffer += decoder.decode(chunk.value || new Uint8Array(), { stream: !chunk.done });
+        var index;
+        while ((index = buffer.indexOf("\n")) >= 0) {
+          var lineText = buffer.slice(0, index);
+          buffer = buffer.slice(index + 1);
+          if (!lineText.trim()) continue;
+          try { onEvent(JSON.parse(lineText)); }
+          catch (e) { console.warn("bad stream line", lineText); }
+        }
+        if (!chunk.done) return pump();
+      });
+    }
+    return pump();
+  }
+
+  function beginStreamingMessage() {
+    clearEmpty(transcriptEl);
+    var wrap = el("div", "msg assistant streaming");
+    wrap.appendChild(el("div", "who", "Assistant"));
+    var bubble = el("div", "bubble", "");
+    wrap.appendChild(bubble);
+    transcriptEl.appendChild(wrap);
+    syncConversationState();
+    scrollDown();
+    return { wrap: wrap, bubble: bubble };
+  }
+
+  function endStreamingMessage(live) {
+    live.wrap.classList.remove("streaming");
+    live.wrap.remove();   // the final event re-adds it with its detail tag
+  }
+
+  function sendClip(blob, mimeType) {
+    setBusy(true);
+    talkBtn.disabled = true;
+    talkBtn.innerHTML = "Transcribing<small>one moment</small>";
+    resetPipeline("heard");
+    setOrb("thinking");
+
+    var form = new FormData();
+    form.append("voice", voiceSelect.value || "");
+    form.append("rate", rateInput.value || "0");
+    form.append("language", languageSelect.value || "");
+    form.append("audio", blob, "clip" + extensionFor(mimeType));
+
+    api("/ask-audio", { method: "POST", body: form })
+      .then(function (r) {
+        if (!r.ok) throw new Error("server returned " + r.status);
+        return consumeStream(r);
+      })
+      .catch(function (e) {
+        if (e.message !== "unauthorized") failure("Could not reach the server: " + e.message);
+      })
+      .finally(function () {
+        setBusy(false);
+        hidePipeline();
+        talkBtn.disabled = false;
+        talkBtn.innerHTML = TALK_LABEL;
+        setOrb("idle");
+      });
+  }
+
+
+  orbCanvas.addEventListener("keydown", function (e) {
+    if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); startRecording(); }
+  });
+  orbCanvas.addEventListener("keyup", function (e) {
+    if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); stopRecording(); }
+  });
+  orbCanvas.addEventListener("mousedown", startRecording);
+  orbCanvas.addEventListener("mouseup", stopRecording);
+  orbCanvas.addEventListener("mouseleave", function () { if (recorder) stopRecording(); });
+  talkBtn.addEventListener("mousedown", startRecording);
+  talkBtn.addEventListener("mouseup", stopRecording);
+  talkBtn.addEventListener("mouseleave", function () { if (recorder) stopRecording(); });
+  talkBtn.addEventListener("touchstart", function (e) { e.preventDefault(); startRecording(); });
+  talkBtn.addEventListener("touchend", function (e) { e.preventDefault(); stopRecording(); });
+
+  // Hold Space to talk, so a demo does not need the mouse. Ignored while the
+  // user is typing, otherwise spaces would never reach the text box.
+  var spaceHeld = false;
+  function typingInInput(e) {
+    var t = e.target;
+    return t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA");
+  }
+  document.addEventListener("keydown", function (e) {
+    if (e.code !== "Space" || typingInInput(e) || e.repeat || spaceHeld) return;
+    e.preventDefault();
+    spaceHeld = true;
+    startRecording();
+  });
+  document.addEventListener("keyup", function (e) {
+    if (e.code !== "Space" || !spaceHeld) return;
+    e.preventDefault();
+    spaceHeld = false;
+    stopRecording();
+  });
+
+  // --- clear --------------------------------------------------------------
+  clearBtn.addEventListener("click", function () {
+    api("/clear", { method: "POST" }).catch(function () { /* clearing the UI is still useful */ })
+      .finally(function () {
+        answers = [];
+        transcriptEl.innerHTML = "";
+        transcriptEl.appendChild(el("p", "empty", "Conversation cleared. Ask something new."));
+        syncConversationState();
+        detailsEl.innerHTML = "";
+        detailsEl.appendChild(el("p", "empty", "Ask something — the working appears here."));
+      });
+  });
+
+  // --- health banner ------------------------------------------------------
+  function loadHealth() {
+  api("/health").then(function (r) { return r.json(); }).then(function (h) {
+    var parts = [];
+    parts.push(h.llm.ok ? h.llm.model : "LLM: " + h.llm.message);
+    if (!h.database.ok) parts.push("DB: " + h.database.message);
+    if (!h.documents.ok) parts.push("Docs: " + h.documents.message);
+    var healthy = h.llm.ok && h.database.ok && h.documents.ok;
+    statusEl.className = healthy ? "ok" : "bad";
+    statusEl.title = parts.join(" · ");
+    // Only spell out a problem; a green dot says enough when all is well.
+    statusText.textContent = healthy ? "" : "check setup";
+  }).catch(function () {
+    statusEl.className = "bad";
+    statusText.textContent = "server unreachable";
+    statusEl.title = "server unreachable";
+  });
+  }
+})();
+</script>
+</body>
+</html>

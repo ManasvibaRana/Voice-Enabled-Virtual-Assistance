@@ -1,0 +1,29 @@
+﻿# Web server
+fastapi>=0.115.0
+# plain uvicorn (not uvicorn[standard]): the extras pull in httptools/uvloop,
+# which need a C compiler on some platforms and buy us nothing here
+uvicorn>=0.30.0
+python-multipart>=0.0.9
+pydantic>=2.7.0
+python-dotenv>=1.0.1
+
+# LLM client (OpenAI-compatible protocol, pointed at NVIDIA NIM's free endpoint)
+openai>=1.40.0
+
+# Speech to text (local, CPU)
+faster-whisper>=1.0.3
+
+# Text to speech (local, offline)
+pyttsx3>=2.90
+
+# Embeddings + vector store (local)
+sentence-transformers>=3.0.0
+chromadb>=0.5.0
+
+# Auth
+bcrypt>=4.1
+PyJWT>=2.8
+
+# Tests
+pytest>=8.0.0
+
