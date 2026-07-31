@@ -207,6 +207,7 @@ def turn_events(
         "attempts": None,
         "classes": None,
         "reminders": None,
+        "library": None,
         "detail": None,
         "error": "",
     }
@@ -237,10 +238,11 @@ def turn_events(
             fixed_answer = result["error"]
 
     elif tool == "reminders":
-        result = reminder_tool.run(question, principal)
+        result = reminder_tool.run(question, principal, memory_key=memory_key)
         rendered = reminder_tool.as_text(result)
         payload.update(
-            reminders=result["reminders"], detail=rendered,
+            reminders=result["reminders"], library=result.get("library"),
+            detail=rendered,
             error="" if result["ok"] else result["error"],
         )
         if result["ok"]:

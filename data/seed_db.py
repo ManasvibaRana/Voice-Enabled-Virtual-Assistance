@@ -20,6 +20,7 @@ N_MARKS = 150
 
 SCHEMA = """
 DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS library_loans;
 DROP TABLE IF EXISTS reminders;
 DROP TABLE IF EXISTS timetable;
 DROP TABLE IF EXISTS attendance;
@@ -67,6 +68,18 @@ CREATE TABLE timetable (
     start_time TEXT    NOT NULL,   -- HH:MM, 24 hour
     end_time   TEXT    NOT NULL,
     room       TEXT    NOT NULL
+);
+
+-- Books currently or recently borrowed. due_date comes from the loan period
+-- in the student FAQ (14 days undergraduate); returned_on is NULL while the
+-- book is still out.
+CREATE TABLE library_loans (
+    id          INTEGER PRIMARY KEY,
+    student_id  INTEGER NOT NULL REFERENCES students(id),
+    title       TEXT    NOT NULL,
+    issued_on   TEXT    NOT NULL,
+    due_date    TEXT    NOT NULL,
+    returned_on TEXT
 );
 
 -- Written to by the reminder tool using bound parameters only. The
@@ -125,6 +138,14 @@ SUBJECTS = [
     ("Artificial Intelligence", 6, 3),
     ("Computer Networks", 6, 3),
 ]
+
+BOOK_TITLES = [
+    "Introduction to Algorithms", "Compilers: Principles and Techniques",
+    "Artificial Intelligence: A Modern Approach", "Computer Networks",
+    "Operating System Concepts", "Database System Concepts",
+    "Clean Code", "The Pragmatic Programmer",
+]
+LOAN_DAYS = 14  # undergraduate loan period, per docs/student_faq.md
 
 EXAM_TYPES = ["midterm", "final", "quiz"]
 MAX_SCORES = {"midterm": 50, "final": 100, "quiz": 20}
@@ -252,6 +273,28 @@ def main() -> None:
         )
         timetable_rows = rows
 
+        # --- library loans --------------------------------------------------
+        # A spread of states so "do I have a book due?" has a real answer:
+        # some returned, some due soon, some already overdue.
+        loans: list[tuple] = []
+        today = date(2026, 7, 29)
+        for i, student in enumerate(rng.sample(students, 14)):
+            title = BOOK_TITLES[i % len(BOOK_TITLES)]
+            # offset -21..+10 days from today, so roughly a third are overdue
+            offset = rng.choice([-21, -12, -5, -3, -1, 0, 2, 4, 6, 9, 10])
+            due = today + timedelta(days=offset)
+            issued = due - timedelta(days=LOAN_DAYS)
+            # A quarter are already back on the shelf.
+            returned = (issued + timedelta(days=rng.randint(3, LOAN_DAYS))).isoformat()                 if rng.random() < 0.25 else None
+            loans.append((len(loans) + 1, student[0], title,
+                          issued.isoformat(), due.isoformat(), returned))
+
+        conn.executemany(
+            "INSERT INTO library_loans (id, student_id, title, issued_on, "
+            "due_date, returned_on) VALUES (?, ?, ?, ?, ?, ?)",
+            loans,
+        )
+
         # --- demo accounts --------------------------------------------------
         # Imported lazily so `python data/seed_db.py` still works if bcrypt is
         # somehow missing; the rest of the seed is more important than these.
@@ -303,6 +346,7 @@ def main() -> None:
         f"  marks      : {len(marks)}\n"
         f"  attendance : {len(attendance)}\n"
         f"  timetable  : {len(timetable_rows)}\n"
+        f"  library    : {len(loans)} loans\n"
         f"  reminders  : 0 (created at runtime)"
     )
     if seeded_accounts:

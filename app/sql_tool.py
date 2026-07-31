@@ -51,6 +51,9 @@ def _read_only_connection(scope: int | None = None) -> sqlite3.Connection:
 # made up of quiz 20, midterm 30 and final 50.
 EXAM_WEIGHTS = {"quiz": 20, "midterm": 30, "final": 50}
 
+# From docs/student_faq.md: "Rs. 5 per book per day".
+LIBRARY_FINE_PER_DAY = 5
+
 
 def _add_grade_views(conn: sqlite3.Connection) -> None:
     """Expose grades and CGPA as real columns, computed from the policy.
@@ -99,6 +102,25 @@ def _add_grade_views(conn: sqlite3.Connection) -> None:
         FROM subject_totals t JOIN subjects s ON s.id = t.subject_id
         """
     )
+    # Books still out, with days overdue and the fine from the student FAQ
+    # (Rs 5 per book per day). Derived rather than left to the model, for the
+    # same reason as CGPA: it would otherwise invent a number.
+    conn.execute(
+        f"""
+        CREATE TEMP VIEW library_dues AS
+        SELECT l.student_id, l.title, l.issued_on, l.due_date,
+               MAX(0, CAST(julianday('now') - julianday(l.due_date) AS INTEGER))
+                   AS days_overdue,
+               MAX(0, CAST(julianday(l.due_date) - julianday('now') AS INTEGER))
+                   AS days_left,
+               MAX(0, CAST(julianday('now') - julianday(l.due_date) AS INTEGER))
+                   * {LIBRARY_FINE_PER_DAY} AS fine_rupees,
+               CASE WHEN julianday('now') > julianday(l.due_date)
+                    THEN 'overdue' ELSE 'due' END AS status
+        FROM library_loans l
+        WHERE l.returned_on IS NULL
+        """
+    )
     conn.execute(
         """
         CREATE TEMP VIEW cgpa AS
@@ -129,6 +151,8 @@ def _apply_student_scope(conn: sqlite3.Connection, student_id: int) -> None:
         f"SELECT * FROM main.timetable WHERE semester = {int(semester)}",
         "CREATE TEMP VIEW reminders AS "
         f"SELECT * FROM main.reminders WHERE student_id = {int(student_id)}",
+        "CREATE TEMP VIEW library_loans AS "
+        f"SELECT * FROM main.library_loans WHERE student_id = {int(student_id)}",
     ]
     for statement in statements:
         conn.execute(statement)
@@ -199,7 +223,12 @@ def schema_context(
                 "-- subject_grades(student_id, subject, credits, total_marks, "
                 "grade, grade_points)  total_marks is out of 100"
             )
-            for view in ("cgpa", "subject_grades"):
+            parts.append(
+                "-- library_dues(student_id, title, due_date, days_overdue, "
+                "fine_rupees, status)  books not yet returned; status is "
+                "'due' or 'overdue'"
+            )
+            for view in ("cgpa", "subject_grades", "library_dues"):
                 try:
                     rows = conn.execute(f"SELECT * FROM {view} LIMIT 3").fetchall()
                 except sqlite3.Error:
@@ -322,6 +351,13 @@ rows use ORDER BY with LIMIT.
       WHERE subject = 'Artificial Intelligence'
   'what is my percentage?' -> the average of 100.0 * score / max_score from
   marks, which is NOT the CGPA.
+- LIBRARY books use the ready-made library_dues view. Never compute overdue
+  days or fines yourself.
+  'do I have any books to return?' / 'any library dues?' / 'when is my book
+  due?' -> SELECT title, due_date, days_overdue, fine_rupees, status
+           FROM library_dues
+  library_loans also holds returned books; library_dues shows only the ones
+  still out.
 - "How many students ..." must count DISTINCT students, not rows: use
   COUNT(DISTINCT m.student_id). One student has many marks and attendance rows,
   so a plain COUNT(*) over those tables over-counts. Use COUNT(*) only when

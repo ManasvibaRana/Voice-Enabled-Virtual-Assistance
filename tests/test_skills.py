@@ -160,6 +160,95 @@ def test_add_then_list_then_complete(stub_llm):
     assert done["ok"] and done["reminders"] == []
 
 
+# --- reminder quality -----------------------------------------------------
+#
+# A real conversation produced three junk reminders - "get woke", "get one
+# book from library" and "get one" - because every mangled correction was
+# treated as a brand-new task. These guard the fixes.
+
+
+@pytest.mark.parametrize(
+    "text,is_task",
+    [
+        ("get one book from library", True),
+        ("submit the AI assignment", True),
+        ("get one", False),          # the exact junk that got saved
+        ("yeah so", False),
+        ("that one", False),
+        ("okay", False),
+        ("", False),
+        ("book", False),             # single word is not a task
+    ],
+)
+def test_vague_fragments_are_not_tasks(text, is_task):
+    assert reminder_tool._is_a_real_task(text) is is_task
+
+
+def test_a_correction_replaces_instead_of_adding(stub_llm):
+    me = principal_for_student(_students()[0]["id"])
+
+    stub_llm({"action": "add", "text": "get woke", "due": ""})
+    reminder_tool.run("remind me to get woke", me, now=MONDAY_MORNING)
+
+    stub_llm({"action": "correct", "text": "get one book from library", "due": ""})
+    fixed = reminder_tool.run("no, get a book from the library", me, now=MONDAY_MORNING)
+
+    assert fixed["action"] == "correct"
+    assert len(fixed["reminders"]) == 1, "a correction created a second reminder"
+    assert fixed["reminders"][0]["text"] == "get one book from library"
+
+
+def test_a_vague_utterance_saves_nothing(stub_llm):
+    me = principal_for_student(_students()[0]["id"])
+    stub_llm({"action": "add", "text": "get one", "due": ""})
+    result = reminder_tool.run("I'll just get one not submit one", me,
+                               now=MONDAY_MORNING)
+    assert result["action"] == "none"
+    assert result["reminders"] == []
+
+
+def test_saying_the_same_thing_twice_does_not_duplicate(stub_llm):
+    me = principal_for_student(_students()[0]["id"])
+    stub_llm({"action": "add", "text": "get one book from library", "due": ""})
+    reminder_tool.run("remind me to get a book", me, now=MONDAY_MORNING)
+
+    stub_llm({"action": "add", "text": "get a book from the library", "due": ""})
+    again = reminder_tool.run("get a book from the library", me, now=MONDAY_MORNING)
+
+    assert again["action"] == "duplicate"
+    assert len(again["reminders"]) == 1
+
+
+def test_a_reminder_can_be_deleted(stub_llm):
+    me = principal_for_student(_students()[0]["id"])
+    stub_llm({"action": "add", "text": "get one book from library", "due": ""})
+    reminder_tool.run("remind me to get a book", me, now=MONDAY_MORNING)
+
+    stub_llm({"action": "delete", "text": "library", "due": ""})
+    gone = reminder_tool.run("delete the library reminder", me, now=MONDAY_MORNING)
+
+    assert gone["action"] == "delete"
+    assert gone["reminders"] == []
+
+
+def test_library_dues_appear_alongside_reminders(stub_llm):
+    """A book due back is a pending task even though nobody typed it in."""
+    with sqlite3.connect(config.DB_PATH) as conn:
+        row = conn.execute(
+            "SELECT student_id, title FROM library_loans "
+            "WHERE returned_on IS NULL LIMIT 1"
+        ).fetchone()
+    assert row, "no outstanding library loans seeded"
+    student_id, title = row
+
+    me = principal_for_student(student_id)
+    stub_llm({"action": "list", "text": "", "due": ""})
+    result = reminder_tool.run("what are my reminders?", me, now=MONDAY_MORNING)
+
+    assert any(b["title"] == title for b in result["library"])
+    assert title in reminder_tool.as_text(result)
+
+
 def test_reminders_are_private_to_each_student(stub_llm):
     students = _students()
     me = principal_for_student(students[0]["id"])
