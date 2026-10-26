@@ -1,0 +1,34 @@
+# Deploys this repo to the Hugging Face Space on every push to main.
+#
+# One-time setup in the GitHub repo (Settings > Secrets and variables > Actions):
+#   Secret   HF_TOKEN   a Hugging Face access token with "write" permission
+#   Variable HF_SPACE   the Space id, e.g. your-hf-username/college-voice-assistant
+#
+# The Space needs its own README with Hugging Face metadata, so hf/README.md
+# replaces the GitHub README in the copy that is pushed.
+name: Deploy to Hugging Face Space
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ vars.HF_SPACE != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to the Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ vars.HF_SPACE }}
+        run: |
+          cp hf/README.md README.md
+          git config user.name "Manasviba Rana"
+          git config user.email "166197395+ManasvibaRana@users.noreply.github.com"
+          git commit -am "Use Space README"
+          git push --force "https://user:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}" HEAD:main

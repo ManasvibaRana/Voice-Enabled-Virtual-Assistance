@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
-from fastapi import FastAPI, File, Form, Header, UploadFile
+from fastapi import FastAPI, File, Form, Header, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -22,6 +22,7 @@ from app import (
     auth,
     compose,
     config,
+    demo,
     identity,
     llm,
     memory,
@@ -349,9 +350,27 @@ def _ndjson(obj: dict[str, Any]) -> str:
 NDJSON_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 
+def _demo_limited(request: Request, *, audio: bool) -> StreamingResponse | None:
+    """In public-demo mode, answer with a friendly "please wait" instead of
+    running the pipeline once a visitor (or the whole site) is over its limit.
+    Sent as a normal `final` event so the UI shows it like any other reply."""
+    message = demo.check_question(
+        demo.client_ip(request.headers, request.client.host if request.client else None)
+    )
+    if message is None:
+        return None
+
+    def events() -> Iterator[str]:
+        if audio:
+            yield _ndjson({"event": "transcript", "transcript": ""})
+        yield _ndjson({"event": "final", "answer": message, "tool": "none", "reason": "Demo rate limit."})
+
+    return StreamingResponse(events(), media_type="application/x-ndjson", headers=NDJSON_HEADERS)
+
+
 @app.post("/ask-text", response_model=None)
 def ask_text(
-    req: AskTextRequest, authorization: str | None = Header(default=None)
+    req: AskTextRequest, request: Request, authorization: str | None = Header(default=None)
 ) -> StreamingResponse | JSONResponse:
     """Streams newline-delimited JSON, same event shape as /ask-audio.
 
@@ -361,6 +380,9 @@ def ask_text(
     principal = _principal(authorization)
     if principal is None:
         return UNAUTHORIZED
+    limited = _demo_limited(request, audio=False)
+    if limited is not None:
+        return limited
 
     def events() -> Iterator[str]:
         answer = ""
@@ -407,6 +429,7 @@ def voices() -> JSONResponse:
 
 @app.post("/ask-audio", response_model=None)
 async def ask_audio(
+    request: Request,
     voice: str = Form(""),
     rate: int = Form(0),
     language: str = Form(""),
@@ -416,6 +439,9 @@ async def ask_audio(
     principal = _principal(authorization)
     if principal is None:
         return UNAUTHORIZED
+    limited = _demo_limited(request, audio=True)
+    if limited is not None:
+        return limited
     """Stream newline-delimited JSON: the transcript first, the answer second.
 
     Transcription takes about a second but the rest of the pipeline takes

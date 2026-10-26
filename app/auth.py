@@ -23,7 +23,7 @@ from typing import Any, TypedDict
 import bcrypt
 import jwt
 
-from app import config
+from app import config, demo
 
 MIN_PASSWORD_LENGTH = 8
 BCRYPT_MAX_BYTES = 72
@@ -271,7 +271,9 @@ def login(username: str, password: str) -> tuple[str, User | None, str]:
             ok = row is not None and verify_password(password, row["password_hash"])
 
             if not ok:
-                if row is not None:
+                # In a public demo a stranger must not be able to lock the
+                # shared demo logins for everyone else.
+                if row is not None and not demo.is_shared_account(row["username"]):
                     attempts = int(row["failed_attempts"]) + 1
                     locked = (
                         (datetime.now() + timedelta(minutes=LOCKOUT_MINUTES)).isoformat(
@@ -308,6 +310,12 @@ def logout(user_id: int) -> bool:
     """Invalidate every outstanding token for this user."""
     try:
         with _connection() as conn:
+            if demo.ENABLED:
+                row = conn.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
+                if row is not None and demo.is_shared_account(row[0]):
+                    # Shared demo login: revoking every token would log out
+                    # every other visitor. The client just drops its own token.
+                    return True
             conn.execute(
                 "UPDATE users SET token_version = token_version + 1 WHERE id = ?",
                 (user_id,),

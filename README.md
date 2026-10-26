@@ -31,6 +31,7 @@ endpoint. **No paid API, no credit card, one free key.**
 - [Accounts and data isolation](#accounts-and-data-isolation)
 - [SQL safety guards](#sql-safety-guards)
 - [Run with Docker](#run-with-docker)
+- [Public demo (Hugging Face Space)](#public-demo-hugging-face-space)
 - [Swapping to Piper TTS](#swapping-to-piper-tts)
 - [Changing the model](#changing-the-model)
 - [Project layout](#project-layout)
@@ -648,6 +649,32 @@ container works immediately. Two things worth knowing: **the image is large
 vector store live in a named volume, so they survive a rebuild — but set
 `JWT_SECRET` in `.env`, or a fresh random one is generated per container and
 every login is invalidated on restart.
+
+## Public demo (Hugging Face Space)
+
+The app runs as a Docker Space on Hugging Face's free CPU tier. Every push to
+`main` redeploys it through `.github/workflows/deploy-space.yml`, which swaps
+in `hf/README.md` (the Space needs its own metadata header).
+
+A public demo needs a few safeguards a local install does not, so
+`app/demo.py` switches them on automatically inside a Space (or with
+`DEMO_MODE=1`):
+
+| Safeguard | Why |
+| --- | --- |
+| 15 questions per visitor every 10 minutes | one person or bot cannot use up the shared free LLM key |
+| 12 questions per minute site-wide | each question is about three LLM calls, so this stays under NIM's ~40 requests/minute |
+| Shared demo logins cannot be locked out | five wrong passwords from a stranger would otherwise lock `CS06020` for everyone |
+| Logging out of a shared demo login only drops your own token | revoking every token would log out every other visitor |
+
+The limits are configurable with `DEMO_QUESTIONS_PER_10_MIN` and
+`DEMO_QUESTIONS_PER_MINUTE`. When a limit is hit, the assistant replies with a
+friendly "please wait" message instead of an error.
+
+**Setup:** create a Docker Space on Hugging Face, add `NVIDIA_API_KEY` and
+`JWT_SECRET` as Space secrets, then add a write token as the GitHub secret
+`HF_TOKEN` and the Space id (`username/space-name`) as the GitHub variable
+`HF_SPACE`.
 
 ## Tests
 
