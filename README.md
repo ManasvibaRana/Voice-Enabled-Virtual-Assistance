@@ -1,8 +1,8 @@
-# Voice-Enabled Virtual Assistant — Multi-Tool AI Agent
+# Voice-Enabled Virtual Assistant - Multi-Tool AI Agent
 
 A voice assistant for a small college. You ask a question out loud, it picks
 one of **five skills**, runs it, and reads a short answer back to you. Sign in
-as a student and it answers about *you* — your attendance, your marks, your
+as a student and it answers about *you* - your attendance, your marks, your
 timetable, your reminders. The web UI shows its working: which skill fired and
 why, the SQL it generated, the passages it retrieved, and how long each stage
 took.
@@ -71,7 +71,7 @@ to that student.
 ### Accounts and data isolation
 
 Sign in with a roll number and password, or create an account by claiming your
-seeded student record. Identity comes from a **verified JWT** — never from
+seeded student record. Identity comes from a **verified JWT** - never from
 anything the browser or the model can assert.
 
 **Demo logins** (seeded by `data/seed_db.py`):
@@ -82,7 +82,7 @@ anything the browser or the model can assert.
 | `staff` | `staff1234` | staff | the whole college |
 
 **To test signing up**, you need a roll number and name that match a seeded
-student — you cannot register as someone who does not exist. Use
+student - you cannot register as someone who does not exist. Use
 `CS04001` with the name `Karan Verma` (the seed is deterministic, so that pair
 is always valid), or read any other pair out of the database:
 
@@ -91,7 +91,7 @@ python -c "import sqlite3; print(sqlite3.connect('data/app.db').execute('SELECT 
 ```
 
 Names are matched ignoring case and extra spaces. Note there is deliberately no
-endpoint that lists students — that was removed because it leaked the whole
+endpoint that lists students - that was removed because it leaked the whole
 cohort, which is also why the roll number has to come from outside the app.
 
 There are two roles, and the difference is enforced by the database rather than
@@ -112,14 +112,14 @@ by prompting. Ask the same question as each:
 
 - **Windows** with **Python 3.11 (64-bit / x64)**
 - About 1.5 GB free disk (mostly PyTorch, pulled in by sentence-transformers)
-- A free NVIDIA NIM API key — see below
+- A free NVIDIA NIM API key - see below
 
-> **Important — architecture matters.** Use an **x64** build of Python. Three
+> **Important - architecture matters.** Use an **x64** build of Python. Three
 > dependencies (`ctranslate2` for faster-whisper, `torch` for
 > sentence-transformers, and `chromadb`'s native deps) publish **no
 > Windows-on-ARM wheels**, so `pip install` fails outright on an ARM64 Python.
 > If your machine is Windows on ARM, install the regular **x64** Python 3.11
-> from python.org — it runs fine under Windows' x64 emulation and every wheel
+> from python.org - it runs fine under Windows' x64 emulation and every wheel
 > then installs normally. Check what you have with:
 >
 > ```powershell
@@ -145,7 +145,7 @@ by prompting. Ask the same question as each:
 1. Go to **<https://build.nvidia.com>**
 2. Sign in with an email address. **No credit card is required.**
 3. Open any model page (e.g. Llama 3.3 70B Instruct) and click **Get API Key**.
-4. Copy the key — it starts with `nvapi-`.
+4. Copy the key - it starts with `nvapi-`.
 
 While you are there, **confirm the exact model identifier** shown on the page.
 Model strings on NIM occasionally change, and a string being *listed* by the
@@ -157,7 +157,7 @@ API does not guarantee it is actually serving traffic. This project ships with
 > `/v1/models` list but, when tested on this account, every inference request
 > to it hung until timeout while `meta/llama-3.1-70b-instruct` answered the
 > identical request in 0.6 s. If you want to try 3.3 later, change the one
-> constant and check `/health` — it will report the failure immediately rather
+> constant and check `/health` - it will report the failure immediately rather
 > than leaving you guessing.
 
 ### 2. Create the virtual environment and install
@@ -221,8 +221,8 @@ shows whether the LLM, database and document index are all healthy.
 
 The first launch downloads two models, one time only, roughly **150 MB total**:
 
-- faster-whisper `base` (~75 MB) — downloads on the first voice question
-- `all-MiniLM-L6-v2` embeddings (~90 MB) — downloads during startup ingestion
+- faster-whisper `base` (~75 MB) - downloads on the first voice question
+- `all-MiniLM-L6-v2` embeddings (~90 MB) - downloads during startup ingestion
 
 They are cached in your user profile, so subsequent starts take a few seconds.
 The first voice question after a fresh install will feel slow while the whisper
@@ -230,10 +230,10 @@ model loads; typed questions work immediately.
 
 ### Using it
 
-- **Hold** the *Push to talk* button — **or just hold the Space bar** — speak,
+- **Hold** the *Push to talk* button - **or just hold the Space bar** - speak,
   and release. A live level meter shows the mic is picking you up. The browser
   records via MediaRecorder and uploads to `/ask-audio`.
-- **👂 Hands-free** listens continuously instead — no button. It spends the
+- **👂 Hands-free** listens continuously instead - no button. It spends the
   first ~1.5s learning your room's noise floor (the hint line says
   "calibrating"), then cuts a clip whenever you stop speaking. Because it
   uploads whatever it hears, a clip is only acted on when the transcript
@@ -241,19 +241,19 @@ model loads; typed questions work immediately.
   Anything not addressed to it appears greyed out for a few seconds and then
   disappears, so you can always see that the microphone is working.
   Untick **"Hands-free needs Hey Campus"** in voice settings to have it answer
-  everything it hears — simpler for a demo, but it will react to any nearby
+  everything it hears - simpler for a demo, but it will react to any nearby
   speech.
 - **Language** in voice settings: leave it on auto-detect and Whisper picks the
   language per clip, so you can ask one question in English and the next in
   Hindi. Force `en` or `hi` if detection struggles with your microphone.
-- Or **type** a question and press Enter — no microphone needed. Typed
+- Or **type** a question and press Enter - no microphone needed. Typed
   questions are spoken too.
 - **✎ misheard? edit & resend** appears under every voice question. Whisper
   mishears occasionally, and a garbled question can never produce a good
   answer, so one click drops the transcript into the text box to fix.
 - **⏹ stops** the assistant mid-sentence; **🔁 replays** the last answer.
   Starting a new recording also cuts the audio, so it never talks over you.
-- **🔊 Voice settings** picks the speaking voice, sets the speed (80–320 wpm)
+- **🔊 Voice settings** picks the speaking voice, sets the speed (80-320 wpm)
   and can turn auto-play off. Choices persist in `localStorage`.
 - Click the **🔍 show working** tag under any answer to see the tool, the SQL,
   the rows, the retrieved passages, and **how long each stage took**
@@ -284,7 +284,7 @@ counts as a secure origin, so this works without HTTPS.
 9. *How many books can I borrow from the library?* → four, for fourteen days
 10. *What happens if I lose my ID card?*
 
-**Personal — pick a name in "Signed in as" first:**
+**Personal - pick a name in "Signed in as" first:**
 
 11. *What is my attendance?*
 12. *What are my marks in Compiler Design?*
@@ -302,7 +302,7 @@ counts as a secure origin, so this works without HTTPS.
 > **You:** *And what about semester 4?*
 > **Assistant:** There are 15 students in semester four as well.
 
-The second question has no subject of its own — it works because the last 6
+The second question has no subject of its own - it works because the last 6
 turns are prepended to both the router prompt and the SQL prompt.
 
 ---
@@ -312,7 +312,7 @@ turns are prepended to both the router prompt and the SQL prompt.
 A question arrives as text (typed) or as audio, which **faster-whisper**
 transcribes locally on CPU. A single **router** LLM call classifies it and
 returns strict JSON naming one of two tools; the response is parsed
-defensively — fences stripped, embedded JSON extracted, and any failure falls
+defensively - fences stripped, embedded JSON extracted, and any failure falls
 back to document search rather than erroring.
 
 If the router picks **query_database**, the text-to-SQL tool builds a system
@@ -333,7 +333,7 @@ text-to-speech, which **pyttsx3** renders offline to a WAV that the browser
 plays automatically. The question and answer are then appended to that
 session's memory.
 
-Every external call — NVIDIA NIM, SQLite, JSON parsing, embedding, synthesis —
+Every external call - NVIDIA NIM, SQLite, JSON parsing, embedding, synthesis - 
 is wrapped so a failure degrades to a sensible message instead of a crash.
 Rate-limit (429) responses get an exponential backoff (2s, 4s, 8s), since the
 free NIM tier is capped at about 40 requests per minute.
@@ -356,14 +356,14 @@ Each guard is one line in [app/sql_tool.py](app/sql_tool.py):
 | **Row cap** | A `LIMIT 100` is appended when the query has no limit, and only 100 rows are fetched. |
 | **Single repair retry** | One SQLite error is fed back to the model for a fix; a second failure returns *"I couldn't answer that from the data"* instead of raising. |
 
-The read-only guard is real, not advisory — attempting a write on that
+The read-only guard is real, not advisory - attempting a write on that
 connection raises `sqlite3.OperationalError: attempt to write a readonly
 database`.
 
 ### Row-level security for LLM-generated SQL
 
 The model chooses the SQL, so "don't look at other students" cannot be a prompt
-instruction — it has to be enforced where the data lives. When a student is
+instruction - it has to be enforced where the data lives. When a student is
 signed in, the connection creates **temp views that shadow the base tables**:
 
 ```sql
@@ -388,7 +388,7 @@ Three details make it actually hold, and each has a test in
    `SELECT * FROM main.marks`, which returns all 150 rows. `validate_sql`
    refuses `main.`, `temp.` and `sqlite_*`, with word-boundary matching so
    ordinary `s.name` aliases still work. **This is the single most important
-   line in the security model** — without it the views are decorative.
+   line in the security model** - without it the views are decorative.
 2. **The credentials table is blanked on every connection**, staff included,
    and excluded from the schema dump. Otherwise `schema_context()` would paste
    password hashes into the prompt and into the "show the working" panel.
@@ -408,7 +408,7 @@ which is misleading rather than private.
 | User enumeration | unknown username and wrong password return the **identical** message |
 | Brute force | 5 failed attempts locks the account for 15 minutes, correct password included |
 | Token integrity | HS256 JWT signed with `JWT_SECRET`; tampered, forged and expired tokens all rejected |
-| Logout | `users.token_version` is incremented, invalidating every token already issued — real revocation without a denylist |
+| Logout | `users.token_version` is incremented, invalidating every token already issued - real revocation without a denylist |
 | Token storage | `sessionStorage` (per-tab, cleared on close), 60-minute expiry, strict CSP, and the page loads zero third-party scripts |
 | Endpoints | `/ask-text`, `/ask-audio`, `/clear` return 401 without a valid token |
 
@@ -466,7 +466,7 @@ strict JSON, and short prose):
 
 | Model | Status |
 |---|---|
-| `meta/llama-3.1-70b-instruct` | **default** — verified working, ~0.6 s to first token |
+| `meta/llama-3.1-70b-instruct` | **default** - verified working, ~0.6 s to first token |
 | `meta/llama-3.1-8b-instruct` | verified working, fastest, slightly weaker SQL |
 | `qwen2.5-coder-32b-instruct` | good at SQL; confirm the exact string on build.nvidia.com |
 | `meta/llama-3.3-70b-instruct` | listed by NIM but timed out on every request when tested |
@@ -482,14 +482,14 @@ screen. Four changes, each measured:
 
 | Change | Effect |
 |---|---|
-| **Stream the transcript** — `/ask-audio` returns newline-delimited JSON, emitting the transcript as soon as whisper finishes | transcript appears at **~1.5s** instead of ~12.4s |
-| **Speculative tools** — the router, the SQL generator and document retrieval all start at once; the loser is abandoned (`SPECULATIVE_TOOLS`) | removes the router from the critical path entirely |
-| **Split models by task** — routing and composition moved to 8B | those two steps went from 1.4–5.6s each to a consistent ~0.5s |
+| **Stream the transcript** - `/ask-audio` returns newline-delimited JSON, emitting the transcript as soon as whisper finishes | transcript appears at **~1.5s** instead of ~12.4s |
+| **Speculative tools** - the router, the SQL generator and document retrieval all start at once; the loser is abandoned (`SPECULATIVE_TOOLS`) | removes the router from the critical path entirely |
+| **Split models by task** - routing and composition moved to 8B | those two steps went from 1.4-5.6s each to a consistent ~0.5s |
 | **Preload whisper at startup** | first voice question no longer pays the ~6s model load |
 | **Emit answer text before synthesizing speech** | text is readable before the WAV is built |
 
-Measured end to end afterwards: transcript at **1.40–1.84s** (very consistent,
-it is local), answer text typically **2.3–5.5s**.
+Measured end to end afterwards: transcript at **1.40-1.84s** (very consistent,
+it is local), answer text typically **2.3-5.5s**.
 
 **The remaining variance is NVIDIA's free tier, not this code.** Eight identical
 calls, same prompt, same token count:
@@ -502,8 +502,8 @@ calls, same prompt, same token count:
 The 70B endpoint is queue-contended, so an occasional turn still takes 30s+.
 Nothing in the client can fix that. If you want predictable speed more than you
 want accuracy, set `LLM_MODEL = ROUTER_MODEL` in
-[app/config.py](app/config.py) to run 8B everywhere — it is ~60x faster but
-drops from 11/11 to 8–10/11 on the example questions, flaking on "which student
+[app/config.py](app/config.py) to run 8B everywhere - it is ~60x faster but
+drops from 11/11 to 8-10/11 on the example questions, flaking on "which student
 has the lowest attendance" and on normalising "average score".
 
 ### Prompt rules that matter
@@ -518,7 +518,7 @@ wrong in testing, and they are worth keeping if you adapt the schema:
   `marks` table returned 8 with `COUNT(*)` (one student had two qualifying
   rows) instead of 7 with `COUNT(DISTINCT student_id)`.
 - **Expand subject abbreviations.** The model wrote
-  `LOWER(s.name) LIKE '%AI%'` — an uppercase pattern against a lowercased
+  `LOWER(s.name) LIKE '%AI%'` - an uppercase pattern against a lowercased
   column, which can never match, and "AI" is not a substring of "artificial
   intelligence" anyway. It returned 0 rows.
 - **Dump low-cardinality values.** `schema_context()` lists every value of
@@ -526,26 +526,26 @@ wrong in testing, and they are worth keeping if you adapt the schema:
   exact spellings instead of guessing at `LIKE` patterns.
 - **Ranking questions need five explicit steps.** "Who are the top three
   students in semester 6?" produced
-  `SELECT name FROM students WHERE semester = 6 ORDER BY id LIMIT 3` — ranked
+  `SELECT name FROM students WHERE semester = 6 ORDER BY id LIMIT 3` - ranked
   by *nothing*, and the answer then stated three arbitrary names as the top
   three. Silently wrong and confidently phrased, which is the worst kind of
   failure. The rule now forces the model to identify the measure, join to it,
   **select it as a second column**, order by it, and limit.
 - **Always select the measure, not just the name.** When the query returned
   only names, the composer could not see any numbers and refused with "their
-  marks are not provided" — even when the join was right. Returning
+  marks are not provided" - even when the join was right. Returning
   `name, avg_percent` fixed both the refusals and made the ranking checkable.
 - **Never LEFT JOIN when ranking.** Asked for the lowest attendance, the model
   wrote a LEFT JOIN; students with no attendance rows get a NULL average,
   SQLite sorts NULL first, and it confidently reported a student with no
   records at all as having "0.0 percent" attendance.
-- **Keep the history short.** `SQL_HISTORY_TURNS = 2` — a long conversation
+- **Keep the history short.** `SQL_HISTORY_TURNS = 2` - a long conversation
   history stapled onto a text-to-SQL prompt measurably degrades accuracy on
   smaller models, which start answering the *earlier* question. Follow-ups only
   need the turn immediately before.
 - **Derive grades, never guess them.** Asked *"what is my CGPA?"*, the model
   found nothing resembling one, averaged the mark percentages and answered
-  *"your CGPA is 74.4"* — confident and wrong, since a CGPA is out of 10.
+  *"your CGPA is 74.4"* - confident and wrong, since a CGPA is out of 10.
   `subject_grades` and `cgpa` are now temp views computed from the weights and
   grade bands in [docs/exam_grading_policy.md](docs/exam_grading_policy.md)
   (quiz 20, midterm 30, final 50; O=10 down to F=0, credit-weighted), so the
@@ -613,11 +613,11 @@ voice-assistant/
 | `POST` | `/clear` | Bearer | `{ok}` |
 | `POST` | `/auth/signup` | `{roll_no, name, password}` | `{token, user}` |
 | `POST` | `/auth/login` | `{username, password}` | `{token, user}` |
-| `POST` | `/auth/logout` | Bearer | `{ok}` — revokes every issued token |
+| `POST` | `/auth/logout` | Bearer | `{ok}` - revokes every issued token |
 | `GET` | `/auth/me` | Bearer | `{user}` |
-| `GET` | `/voices` | — | `{voices: [{id, name}], default_rate}` |
-| `GET` | `/health` | — | LLM / database / document-index status |
-| `GET` | `/` | — | the web UI |
+| `GET` | `/voices` | - | `{voices: [{id, name}], default_rate}` |
+| `GET` | `/health` | - | LLM / database / document-index status |
+| `GET` | `/` | - | the web UI |
 
 `/ask-audio` returns `application/x-ndjson`, one JSON object per line, so the
 UI can render each stage as it completes rather than waiting for the whole
@@ -646,7 +646,7 @@ The build bakes in the whisper and MiniLM models and seeds the database, so the
 container works immediately. Two things worth knowing: **the image is large
 (~3 GB)**, almost entirely PyTorch, and `espeak-ng` is installed because
 `pyttsx3` has no voice at all on Linux without it. Accounts, reminders and the
-vector store live in a named volume, so they survive a rebuild — but set
+vector store live in a named volume, so they survive a rebuild - but set
 `JWT_SECRET` in `.env`, or a fresh random one is generated per container and
 every login is invalidated on restart.
 
@@ -692,7 +692,7 @@ the false triggers it exists to prevent.
 
 `test_auth.py` and `test_rls.py` are the security-critical ones: password
 hashing and salting, the no-enumeration property, lockout, token
-tamper/forge/expiry, logout revocation, and — most importantly — the adversarial
+tamper/forge/expiry, logout revocation, and - most importantly - the adversarial
 queries a signed-in student must not be able to answer. A regression in row-level
 isolation fails *silently*: the assistant keeps working, it just answers with
 somebody else's data. Every bug found while building this project has a test here.
@@ -701,31 +701,31 @@ somebody else's data. Every bug found while building this project has a test her
 
 ## Troubleshooting
 
-**`NVIDIA_API_KEY is not set`** — you skipped step 3, or the `.env` file is not
+**`NVIDIA_API_KEY is not set`** - you skipped step 3, or the `.env` file is not
 in the `voice-assistant` folder next to `run.bat`.
 
-**Answers say "I couldn't answer that from the data"** — usually a wrong or
+**Answers say "I couldn't answer that from the data"** - usually a wrong or
 non-serving model string. Check `/health` in a browser: it reports whether the
 LLM call actually succeeds.
 
-**Every request hangs for ~60 s then fails** — the model string is listed but
+**Every request hangs for ~60 s then fails** - the model string is listed but
 not serving (this is exactly what `meta/llama-3.3-70b-instruct` did in
 testing). Confirm the key itself is fine by checking that a deliberately wrong
 key returns `403` quickly, then switch `LLM_MODEL` to
 `meta/llama-3.1-70b-instruct`.
 
 **`ERROR: Could not find a version that satisfies the requirement torch` (or
-`ctranslate2`)** — you are on an ARM64 Python. See the note in
+`ctranslate2`)** - you are on an ARM64 Python. See the note in
 [Requirements](#requirements): install x64 Python 3.11.
 
-**`Failed building wheel for httptools` / `grpcio`** — same cause as above, an
+**`Failed building wheel for httptools` / `grpcio`** - same cause as above, an
 ARM64 Python trying to compile packages that ship no wheels for it.
 
-**Microphone button does nothing** — the browser blocked the permission, or the
+**Microphone button does nothing** - the browser blocked the permission, or the
 page is not on `127.0.0.1`/`localhost`. The typed input always works as a
 fallback.
 
-**Hands-free never responds** — open the browser console. On start it logs the
+**Hands-free never responds** - open the browser console. On start it logs the
 measured noise floor and threshold:
 `[hands-free] noise floor 0.0078 threshold 0.0300`. Then watch the level meter
 while you speak: if the bar barely moves, your microphone gain is too low for
@@ -738,7 +738,7 @@ block in [static/index.html](static/index.html):
 | `HF_STOP_FRAMES` (17 ≈ 1s) | silence that ends an utterance | too low: cuts you off mid-sentence |
 | `HF_MIN_SPEECH_MS` (350) | shortest clip worth transcribing | too high: short questions dropped |
 
-**Hands-free hears me but always ignores me** — the wake phrase has to *start*
+**Hands-free hears me but always ignores me** - the wake phrase has to *start*
 the transcript. Check the greyed-out text to see what it actually heard; if it
 says "Campus, what's…" the opening word was clipped. Either say "Hey Campus"
 slightly more deliberately, or untick the wake-phrase requirement.
@@ -756,13 +756,13 @@ detected (so the wake phrase is never clipped), that an utterance produces
 exactly one clip, that coughs and room tone are ignored, and that the assistant
 does not trigger on its own voice. Needs node; the Python suite does not.
 
-**No audio plays but text appears** — browsers block autoplay until you have
+**No audio plays but text appears** - browsers block autoplay until you have
 interacted with the page; click anywhere and ask again. The answer text is
 always shown regardless.
 
-**Documents index is empty** — delete `data\chroma` and restart the server to
+**Documents index is empty** - delete `data\chroma` and restart the server to
 force a re-ingest.
 
-**Rate limited** — the free NIM tier allows roughly 40 requests per minute, and
+**Rate limited** - the free NIM tier allows roughly 40 requests per minute, and
 each question costs two calls (router + composition). The client backs off and
 retries automatically; just ask more slowly.

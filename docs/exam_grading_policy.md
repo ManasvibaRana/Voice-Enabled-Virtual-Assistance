@@ -4,9 +4,9 @@
 
 Each subject is assessed out of 100 marks in total, split as follows:
 
-- **Quiz** — 20 marks, best two of three quizzes are counted.
-- **Midterm** — 50 marks, scaled down to 30 marks in the final total.
-- **End-semester (final) examination** — 100 marks, scaled down to 50 marks.
+- **Quiz** - 20 marks, best two of three quizzes are counted.
+- **Midterm** - 50 marks, scaled down to 30 marks in the final total.
+- **End-semester (final) examination** - 100 marks, scaled down to 50 marks.
 
 A student must score at least 40% in the end-semester examination separately,
 in addition to 40% in the total, to pass a subject.

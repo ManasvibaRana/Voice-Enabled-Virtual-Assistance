@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Voice Assistant — College Agent</title>
+<title>Voice Assistant - College Agent</title>
 <style>
   /* ===================================================================
      Design tokens
@@ -635,7 +635,7 @@
 
     <div id="signup-form" hidden>
       <p class="note hint-box">
-        Your roll number and name must match the college record — you cannot
+        Your roll number and name must match the college record - you cannot
         register as someone who does not exist.
         <br />Trying the demo? Use <code>CS04001</code> with the name
         <code>Karan Verma</code>, or any other seeded student.
@@ -651,7 +651,7 @@
     </div>
 
     <p class="gate-error" id="gate-error"></p>
-    <p class="note demo-note">Demo logins &mdash; student <code>CS06020 / demo1234</code> &middot; staff <code>staff / staff1234</code>. Staff see class-wide figures; students see only their own records.</p>
+    <p class="note demo-note">Demo logins - student <code>CS06020 / demo1234</code> &middot; staff <code>staff / staff1234</code>. Staff see class-wide figures; students see only their own records.</p>
   </div>
 </section>
 
@@ -721,7 +721,7 @@
     <div class="panel-head"><h2>How I answered</h2></div>
     <div id="details">
       <div class="empty-state">
-        <p class="lead">Every answer shows its working here — which skill fired
+        <p class="lead">Every answer shows its working here - which skill fired
           and why, the SQL it generated, the passages it retrieved, and how long
           each stage took.</p>
       </div>
@@ -1334,7 +1334,7 @@
       bC.appendChild(el("h3", null, "Classes (" + d.classes.length + ")"));
       d.classes.forEach(function (c) {
         var box = el("div", "chunk");
-        box.appendChild(el("div", "meta", c.day + "  ·  " + c.start_time + "–" + c.end_time + "  ·  room " + c.room));
+        box.appendChild(el("div", "meta", c.day + "  ·  " + c.start_time + "-" + c.end_time + "  ·  room " + c.room));
         box.appendChild(el("div", null, c.subject));
         bC.appendChild(box);
       });
@@ -1779,7 +1779,7 @@
         transcriptEl.appendChild(el("p", "empty", "Conversation cleared. Ask something new."));
         syncConversationState();
         detailsEl.innerHTML = "";
-        detailsEl.appendChild(el("p", "empty", "Ask something — the working appears here."));
+        detailsEl.appendChild(el("p", "empty", "Ask something - the working appears here."));
       });
   });
 
