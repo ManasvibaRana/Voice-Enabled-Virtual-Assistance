@@ -43,10 +43,8 @@ endpoint. **No paid API, no credit card, one free key.**
 
 ```
 microphone ─► faster-whisper (local STT, auto language detect)
-                    │
-              wake phrase gate (hands-free mode only)
-                    │
-                    ▼
+  or typed          │
+  text              ▼
               router (1 LLM call, strict JSON, 5-way)
                     │
    ┌────────────┬───┴────┬────────────┬───────────┐
@@ -63,10 +61,13 @@ SQLite (ro)  Chroma     queries     params (rw)   │
             pyttsx3 (local TTS) ─► browser plays WAV
 ```
 
-Conversation memory keeps the last 6 turns per session, so *"and what about
-semester 4?"* resolves against the previous question. Signing in binds the
-session to a student id, which is injected into tool prompts so "my" resolves
-to that student.
+Conversation memory keeps the last 6 turns per signed-in account, so *"and what
+about semester 4?"* resolves against the previous question. Signing in links
+the account to a student record, which is injected into tool prompts so "my"
+resolves to that student.
+
+Answers stream back as they are produced: the transcript appears first, then
+the answer text types itself out, then the speech plays.
 
 ### Accounts and data isolation
 
@@ -110,9 +111,29 @@ by prompting. Ask the same question as each:
 
 ## Requirements
 
-- **Windows** with **Python 3.11 (64-bit / x64)**
+- **Python 3.11 (64-bit / x64)**. The steps below are for Windows; on Linux or
+  macOS use `run.sh`, or skip Python entirely and [run with Docker](#run-with-docker)
 - About 1.5 GB free disk (mostly PyTorch, pulled in by sentence-transformers)
-- A free NVIDIA NIM API key - see below
+- A modern browser (Chrome, Edge or Firefox) with microphone access - typing
+  works without one
+
+### Keys and secrets
+
+Only **one key** has to come from outside. Everything else is either generated
+by you or optional.
+
+| Name | Required? | What it is | How to get it |
+|---|---|---|---|
+| `NVIDIA_API_KEY` | **Yes** | Key for the free hosted LLM (NVIDIA NIM) | Free at <https://build.nvidia.com>, no credit card - see [step 1](#1-get-the-free-nvidia-nim-key) |
+| `JWT_SECRET` | Strongly recommended | Signs login tokens | Make one yourself - see [step 3](#3-add-your-key-and-secret). Without it, everyone is logged out on every restart |
+| `NVIDIA_BASE_URL` | No | NIM endpoint | Defaults to `https://integrate.api.nvidia.com/v1` |
+| `TTS_ENGINE` | No | Speech engine | Defaults to `pyttsx3` |
+| `DEMO_MODE` | No | Turns on the [public-demo safeguards](#public-demo-hugging-face-space) | Set to `1`; switches on automatically inside a Hugging Face Space |
+| `HF_TOKEN`, `HF_SPACE` | Only for auto-deploy | GitHub secret / variable for the Hugging Face deploy | See [Public demo](#public-demo-hugging-face-space) |
+
+Speech-to-text, text-to-speech, embeddings, the vector store and the database
+all run locally and need no key. The whisper and embedding models download
+themselves on first run (about 150 MB, no account needed).
 
 > **Important - architecture matters.** Use an **x64** build of Python. Three
 > dependencies (`ctranslate2` for faster-whisper, `torch` for
@@ -132,20 +153,13 @@ by prompting. Ask the same question as each:
 
 ## Setup (Windows)
 
-> **Already done on this machine.** x64 Python 3.11.9 is installed at
-> `C:\Users\manas\AppData\Local\Programs\Python\Python311-x64`, `.venv` is
-> created with every dependency installed, `data\app.db` is seeded, the docs
-> are ingested (17 chunks), the whisper and MiniLM models are downloaded, and
-> `.env` holds your key. **You can skip straight to
-> [Running it](#running-it)** and just run `.\run.bat`. The steps below are for
-> setting this up somewhere else.
-
 ### 1. Get the free NVIDIA NIM key
 
 1. Go to **<https://build.nvidia.com>**
 2. Sign in with an email address. **No credit card is required.**
-3. Open any model page (e.g. Llama 3.3 70B Instruct) and click **Get API Key**.
-4. Copy the key - it starts with `nvapi-`.
+3. Open any model page (e.g. Llama 3.1 70B Instruct) and click **Get API Key**.
+4. Copy the key - it starts with `nvapi-`. Treat it like a password: keep it in
+   `.env`, which is git-ignored, and never commit it.
 
 While you are there, **confirm the exact model identifier** shown on the page.
 Model strings on NIM occasionally change, and a string being *listed* by the
@@ -162,7 +176,7 @@ API does not guarantee it is actually serving traffic. This project ships with
 
 ### 2. Create the virtual environment and install
 
-Open PowerShell in the `voice-assistant` folder:
+Open PowerShell in the project folder (the one containing `run.bat`):
 
 ```powershell
 python -m venv .venv
@@ -174,18 +188,28 @@ pip install -r requirements.txt
 If PowerShell blocks the activate script, run
 `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` first.
 
-### 3. Add your key
+### 3. Add your key and secret
 
 ```powershell
 copy .env.example .env
 notepad .env
 ```
 
-Paste the key so the file reads:
+Generate a random signing secret for login tokens:
+
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Paste the NVIDIA key and that secret so the file reads:
 
 ```
 NVIDIA_API_KEY=nvapi-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+JWT_SECRET=paste-the-random-string-here
 ```
+
+`JWT_SECRET` is technically optional - without it a random one is generated at
+startup - but then every login is invalidated whenever the server restarts.
 
 ### 4. Seed the database
 
@@ -211,38 +235,32 @@ or manually:
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Then open **<http://127.0.0.1:8000>**.
+Then open **<http://127.0.0.1:8000>** and sign in - for example as `CS06020` /
+`demo1234` (a student) or `staff` / `staff1234` (see
+[Accounts and data isolation](#accounts-and-data-isolation)). Every question
+endpoint needs a signed-in user.
 
 `run.bat` seeds the database if it is missing; document ingestion happens
 automatically on server startup. The status line at the top right of the page
-shows whether the LLM, database and document index are all healthy.
+shows whether the LLM, database and document index are all healthy - you can
+also open <http://127.0.0.1:8000/health> directly.
 
 ### First run is slow
 
 The first launch downloads two models, one time only, roughly **150 MB total**:
 
-- faster-whisper `base` (~75 MB) - downloads on the first voice question
 - `all-MiniLM-L6-v2` embeddings (~90 MB) - downloads during startup ingestion
+- faster-whisper `base` (~75 MB) - preloaded in the background at startup
 
 They are cached in your user profile, so subsequent starts take a few seconds.
-The first voice question after a fresh install will feel slow while the whisper
-model loads; typed questions work immediately.
+Typed questions work as soon as the server is up; a voice question asked in the
+first few seconds may wait for whisper to finish loading.
 
 ### Using it
 
-- **Hold** the *Push to talk* button - **or just hold the Space bar** - speak,
+- **Hold** the *Hold to talk* button - **or just hold the Space bar** - speak,
   and release. A live level meter shows the mic is picking you up. The browser
   records via MediaRecorder and uploads to `/ask-audio`.
-- **👂 Hands-free** listens continuously instead - no button. It spends the
-  first ~1.5s learning your room's noise floor (the hint line says
-  "calibrating"), then cuts a clip whenever you stop speaking. Because it
-  uploads whatever it hears, a clip is only acted on when the transcript
-  **starts with "Hey Campus…"**. Say *"Hey Campus, what's my next class?"*
-  Anything not addressed to it appears greyed out for a few seconds and then
-  disappears, so you can always see that the microphone is working.
-  Untick **"Hands-free needs Hey Campus"** in voice settings to have it answer
-  everything it hears - simpler for a demo, but it will react to any nearby
-  speech.
 - **Language** in voice settings: leave it on auto-detect and Whisper picks the
   language per clip, so you can ask one question in English and the next in
   Hindi. Force `en` or `hi` if detection struggles with your microphone.
@@ -258,7 +276,7 @@ model loads; typed questions work immediately.
 - Click the **🔍 show working** tag under any answer to see the tool, the SQL,
   the rows, the retrieved passages, and **how long each stage took**
   (speech-to-text, router, tool, compose, speech).
-- **Clear conversation** wipes that session's memory server-side.
+- **✕ Clear conversation** wipes your conversation memory server-side.
 
 Your browser will ask for microphone permission on first use. `127.0.0.1`
 counts as a secure origin, so this works without HTTPS.
@@ -284,12 +302,13 @@ counts as a secure origin, so this works without HTTPS.
 9. *How many books can I borrow from the library?* → four, for fourteen days
 10. *What happens if I lose my ID card?*
 
-**Personal - pick a name in "Signed in as" first:**
+**Personal - sign in as a student (e.g. `CS06020`) first:**
 
 11. *What is my attendance?*
-12. *What are my marks in Compiler Design?*
+12. *What are my marks in Compiler Design?* / *What is my CGPA?*
 13. *What is my next class?* / *What are my classes on Friday?*
-14. *Remind me to submit the AI assignment on Friday* → then *What are my reminders?*
+14. *Remind me to submit the AI assignment on Friday* → then *What are my
+    reminders?* (overdue library books are listed alongside your reminders)
 
 **Assistant itself:**
 
@@ -311,9 +330,12 @@ turns are prepended to both the router prompt and the SQL prompt.
 
 A question arrives as text (typed) or as audio, which **faster-whisper**
 transcribes locally on CPU. A single **router** LLM call classifies it and
-returns strict JSON naming one of two tools; the response is parsed
+returns strict JSON naming one of the five tools; the response is parsed
 defensively - fences stripped, embedded JSON extracted, and any failure falls
-back to document search rather than erroring.
+back to document search rather than erroring. To save time, SQL generation and
+document retrieval start *while* the router is still deciding, and whichever
+result is not needed is discarded (`SPECULATIVE_TOOLS` in
+[app/config.py](app/config.py)).
 
 If the router picks **query_database**, the text-to-SQL tool builds a system
 prompt containing the live `CREATE TABLE` statements plus three sample rows per
@@ -326,12 +348,19 @@ If the router picks **search_documents**, the question is embedded with
 **all-MiniLM-L6-v2** and the top 4 chunks are pulled from a local **Chroma**
 collection built from `./docs` at startup (~500-character chunks, 50-character
 overlap; re-ingestion is skipped if the collection is already populated).
+Chunks below a minimum similarity (`RAG_MIN_SCORE`) are dropped, so an
+off-topic question gets "the documents don't cover that" instead of an invented
+answer.
 
-Either way, raw rows and raw chunks are **never** spoken. A final composition
-call turns them into one or two plain-text sentences suitable for
-text-to-speech, which **pyttsx3** renders offline to a WAV that the browser
-plays automatically. The question and answer are then appended to that
-session's memory.
+**timetable** and **reminders** never let the model write SQL: the model only
+classifies intent or extracts fields as JSON, and Python runs fixed queries
+with bound parameters. **smalltalk** answers directly.
+
+Whatever tool runs, raw rows and raw chunks are **never** spoken. A final
+composition call turns them into one or two plain-text sentences suitable for
+text-to-speech, streamed to the browser as they are written. **pyttsx3** then
+renders the answer offline to a WAV that the browser plays automatically. The
+question and answer are appended to that account's memory.
 
 Every external call - NVIDIA NIM, SQLite, JSON parsing, embedding, synthesis - 
 is wrapped so a failure degrades to a sensible message instead of a crash.
@@ -564,9 +593,9 @@ wrong in testing, and they are worth keeping if you adapt the schema:
 ## Project layout
 
 ```
-voice-assistant/
+Voice-Enabled-Virtual-Assistance/
   app/
-    main.py           FastAPI app, endpoints, startup ingestion
+    main.py           FastAPI app, endpoints, streaming pipeline, startup
     llm.py            NVIDIA NIM client (OpenAI-compatible), retry/backoff, JSON helper
     auth.py           bcrypt passwords, JWT issue/verify, signup, login, lockout
     router.py         5-way tool routing
@@ -576,11 +605,11 @@ voice-assistant/
     reminder_tool.py  the only write path; bound parameters, never model SQL
     smalltalk.py      greetings, capabilities, out-of-scope questions
     identity.py       verified token -> principal (user + student + role)
-    wake.py           wake-phrase gating for hands-free mode
+    demo.py           public-demo rate limits and shared-login protection
     stt.py            faster-whisper wrapper, auto language detection
     tts.py            pyttsx3 wrapper behind a swappable interface
-    memory.py         per-session history (last 6 turns), TTL eviction
-    compose.py        final spoken-answer composition
+    memory.py         per-account history (last 6 turns), TTL eviction
+    compose.py        final spoken-answer composition (streamed)
     config.py         env vars, paths, constants
   data/
     seed_db.py    creates and populates app.db (fixed seed 42)
@@ -593,12 +622,20 @@ voice-assistant/
   static/
     index.html    single-file vanilla JS frontend
   tests/
-    conftest.py       seeds the db if missing, puts app/ on the path
+    conftest.py           seeds the db if missing, puts app/ on the path
     test_sql_safety.py    the SQL guards
     test_pipeline.py      router, retry loop, RAG threshold, memory
     test_auth.py          passwords, tokens, lockout, revocation
     test_rls.py           row-level isolation (security critical)
-    hands_free_harness.js headless VAD test (needs node)
+    test_skills.py        identity, timetable, reminders, grade/CGPA views
+    test_demo.py          public-demo rate limits and shared logins
+    test_frontend.py      static checks on index.html
+    highlight_check.js    SQL syntax-highlighter check (needs node)
+  hf/README.md            Hugging Face Space metadata + landing page
+  .github/workflows/
+    deploy-space.yml      pushes main to the Hugging Face Space
+  Dockerfile / docker-compose.yml
+  TECHNICAL.html          longer technical write-up
   requirements.txt
   .env.example
   run.bat / run.sh
@@ -608,8 +645,8 @@ voice-assistant/
 
 | Method | Path | Body | Returns |
 |---|---|---|---|
-| `POST` | `/ask-text` | `{question, speak?, voice?, rate?}` + `Authorization: Bearer` | `{answer, tool, reason, timings, sql?, columns?, rows?, chunks?, audio_base64?, error}` |
-| `POST` | `/ask-audio` | multipart: `audio`, `voice?`, `rate?`, `language?`, `require_wake?` + Bearer | **streams NDJSON**, see below |
+| `POST` | `/ask-text` | `{question, speak?, voice?, rate?}` + `Authorization: Bearer` | **streams NDJSON**, see below |
+| `POST` | `/ask-audio` | multipart: `audio`, `voice?`, `rate?`, `language?` + Bearer | **streams NDJSON**, see below |
 | `POST` | `/clear` | Bearer | `{ok}` |
 | `POST` | `/auth/signup` | `{roll_no, name, password}` | `{token, user}` |
 | `POST` | `/auth/login` | `{username, password}` | `{token, user}` |
@@ -619,15 +656,25 @@ voice-assistant/
 | `GET` | `/health` | - | LLM / database / document-index status |
 | `GET` | `/` | - | the web UI |
 
-`/ask-audio` returns `application/x-ndjson`, one JSON object per line, so the
-UI can render each stage as it completes rather than waiting for the whole
-turn:
+Both question endpoints return `application/x-ndjson`, one JSON object per
+line, so the UI can render each stage as it completes rather than waiting for
+the whole turn:
 
 ```
-{"event":"transcript","transcript":"how many students are in semester 6","stt_ms":1402}
-{"event":"final","answer":"There are 15 students in semester 6.","tool":"query_database",...}
+{"event":"transcript","transcript":"how many students are in semester 6","stt_ms":1402}   (audio only)
+{"event":"stage","stage":"routed","tool":"query_database","ms":480,...}
+{"event":"stage","stage":"queried","ms":1210}
+{"event":"delta","text":"There are 15 "}
+{"event":"delta","text":"students in semester 6."}
+{"event":"stage","stage":"composed","ms":530}
+{"event":"final","answer":"There are 15 students in semester 6.","tool":"query_database","sql":"SELECT ...","timings":{...},...}
 {"event":"audio","audio_base64":"UklGR...","audio_mime":"audio/wav","tts_ms":267}
 ```
+
+A client that only wants the answer can ignore everything except the `final`
+event, which carries the complete payload (`answer, tool, reason, timings, sql,
+columns, rows, chunks, classes, reminders, error`). `/ask-text` only sends the
+`audio` event when `speak` is true.
 
 ## Run with Docker
 
@@ -679,16 +726,19 @@ friendly "please wait" message instead of an error.
 ## Tests
 
 ```powershell
-pytest tests -q          # 115 tests, ~14s, no network or API key needed
+pytest tests -q          # no network or API key needed
+node tests\highlight_check.js static\index.html   # optional, needs node
 ```
 
 The LLM is stubbed, so the suite runs offline. It covers the SQL guards
 (injection, DDL, stacked statements, real read-only enforcement, the row cap),
 defensive router parsing, the SQL repair-retry loop, the RAG confidence
 threshold, memory capping/isolation/eviction, sign-in and anonymous refusal,
-timetable ordering and semester filtering, the reminder add/list/complete cycle
-with per-student privacy, date-phrase parsing, and wake-phrase gating including
-the false triggers it exists to prevent.
+timetable ordering and semester filtering, the reminder add/list/complete/delete
+cycle with per-student privacy and duplicate/correction handling, date-phrase
+parsing, the grade and CGPA views against the published policy, the public-demo
+rate limits, and static checks on the frontend (for example, that every API
+call sends the auth header).
 
 `test_auth.py` and `test_rls.py` are the security-critical ones: password
 hashing and salting, the no-enumeration property, lockout, token
@@ -702,7 +752,13 @@ somebody else's data. Every bug found while building this project has a test her
 ## Troubleshooting
 
 **`NVIDIA_API_KEY is not set`** - you skipped step 3, or the `.env` file is not
-in the `voice-assistant` folder next to `run.bat`.
+in the project folder next to `run.bat`.
+
+**Logged out after every restart** - `JWT_SECRET` is not set in `.env`, so a new
+random one is generated each time the server starts. See step 3.
+
+**"Sign in to use the assistant."** - every question endpoint needs a signed-in
+user. Use a demo login or create an account.
 
 **Answers say "I couldn't answer that from the data"** - usually a wrong or
 non-serving model string. Check `/health` in a browser: it reports whether the
@@ -725,36 +781,9 @@ ARM64 Python trying to compile packages that ship no wheels for it.
 page is not on `127.0.0.1`/`localhost`. The typed input always works as a
 fallback.
 
-**Hands-free never responds** - open the browser console. On start it logs the
-measured noise floor and threshold:
-`[hands-free] noise floor 0.0078 threshold 0.0300`. Then watch the level meter
-while you speak: if the bar barely moves, your microphone gain is too low for
-the threshold. The three constants to adjust are at the top of the hands-free
-block in [static/index.html](static/index.html):
-
-| Constant | Meaning | Symptom if wrong |
-|---|---|---|
-| `hfThreshold()` floor (`0.030`) | how loud counts as speech | too high: never triggers · too low: triggers on room tone |
-| `HF_STOP_FRAMES` (17 ≈ 1s) | silence that ends an utterance | too low: cuts you off mid-sentence |
-| `HF_MIN_SPEECH_MS` (350) | shortest clip worth transcribing | too high: short questions dropped |
-
-**Hands-free hears me but always ignores me** - the wake phrase has to *start*
-the transcript. Check the greyed-out text to see what it actually heard; if it
-says "Campus, what's…" the opening word was clipped. Either say "Hey Campus"
-slightly more deliberately, or untick the wake-phrase requirement.
-
-**Testing hands-free without a microphone**
-
-```powershell
-node tests\hands_free_harness.js static\index.html
-```
-
-Runs the real frontend script against fake Web Audio, MediaRecorder and
-`fetch`, driving the endpointing state machine with simulated microphone
-levels and a virtual clock. It checks that recording starts *before* speech is
-detected (so the wake phrase is never clipped), that an utterance produces
-exactly one clip, that coughs and room tone are ignored, and that the assistant
-does not trigger on its own voice. Needs node; the Python suite does not.
+**Whisper mishears you** - use **✎ misheard? edit & resend**, or force the
+language to `en` or `hi` in voice settings if auto-detection keeps picking the
+wrong one.
 
 **No audio plays but text appears** - browsers block autoplay until you have
 interacted with the page; click anywhere and ask again. The answer text is
@@ -764,5 +793,10 @@ always shown regardless.
 force a re-ingest.
 
 **Rate limited** - the free NIM tier allows roughly 40 requests per minute, and
-each question costs two calls (router + composition). The client backs off and
-retries automatically; just ask more slowly.
+each question costs about three calls (router, the tool's own call, and
+composition), plus one speculative SQL call when `SPECULATIVE_TOOLS` is on. The
+client backs off and retries automatically; ask more slowly, or set
+`SPECULATIVE_TOOLS = False` in [app/config.py](app/config.py).
+
+**No sound on Linux** - `pyttsx3` needs `espeak-ng` installed
+(`sudo apt install espeak-ng`). The Docker image already includes it.
